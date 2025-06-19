@@ -8,7 +8,7 @@ def count_run_with_collisions(file):
     count = 0
     for run_key in runs:
         locations = runs[run_key]['vehicles']['0']['location'][:]
-        if np.any(np.all(locations == [0, 0, 0], axis=1)):
+        if np.any(np.all(locations == [0.0, 0.0, 0.0], axis=1)):
             count += 1
     return count
 
@@ -76,8 +76,8 @@ for frame_lidar in lasers:
     y = frame_lidar[:, 1]
     intensity = frame_lidar[:, 3]
 
-    px = (scaled_width / 2 + x * lidar_scale).astype(np.int32)
-    py = (scaled_height / 2 - y * lidar_scale).astype(np.int32)
+    px = (scaled_width / 2 + y * lidar_scale).astype(np.int32)
+    py = (scaled_height / 2 - x * lidar_scale).astype(np.int32)
 
     # Filter valid pixel locations
     valid = (px >= 0) & (px < scaled_width) & (py >= 0) & (py < scaled_height)
