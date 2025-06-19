@@ -1,0 +1,32 @@
+lidar:
+  type: sensor.lidar.ray_cast
+  transform:
+    x: 0.0
+    y: 0.0
+    z: 2.5
+    pitch: 0.0
+    yaw: 0.0
+    roll: 0.0
+  attributes:
+    channels: 32
+    range: 120.0
+    points_per_second: 655360
+    rotation_frequency: 10.0
+    upper_fov: 22.5
+    lower_fov: -22.5
+    sensor_tick: 0.1
+
+camera:
+  type: sensor.camera.rgb
+  transform:
+    x: 2.0
+    y: 0.0
+    z: 2.0
+    pitch: -10.0
+    yaw: 0.0
+    roll: 0.0
+  attributes:
+    image_size_x: 320
+    image_size_y: 240
+    fov: 90.0
+    sensor_tick: 0.1
