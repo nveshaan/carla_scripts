@@ -110,7 +110,7 @@ def draw_slider(surface, value):
     pygame.draw.rect(surface, (160, 160, 160), (slider_x, slider_y, slider_width, slider_height))
     pos = slider_x + int((value / max(1, num_frames - 1)) * slider_width)
     pygame.draw.circle(surface, (255, 0, 0), (pos, slider_y + slider_height // 2), thumb_radius)
-    label = font.render(f"Frame: {value}", True, (255, 255, 255))
+    label = font.render(f"Frame: {value}", True, (0, 0, 0))
     surface.blit(label, (10, slider_y - 25))
 
 def draw_info(surface, index, render_fps):
