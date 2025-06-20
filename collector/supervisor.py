@@ -9,9 +9,9 @@ import msvcrt
 from tqdm import tqdm
 
 # --- Configuration ---
-MAIN_SCRIPT = 'python run_collector.py --runs=10 --no-progress'
+MAIN_SCRIPT = 'python collector/run_collector.py --runs=10 --no-progress'
 BACKUP_PATTERN = 'backup_run_*.hdf5'
-AGG_FILE = r'D:/aggregated_runs.hdf5'
+AGG_FILE = r'D:/marathon.hdf5'
 TARGET_RUNS = 1000
 RELAUNCH_DELAY = 2  # seconds between relaunches
 
@@ -45,10 +45,10 @@ def merge_backup(backup_path):
         sorted_keys = sorted(src['runs'].keys(), key=lambda k: int(k.split('_')[-1]))
         valid_keys = [
             k for k in sorted_keys
-            if len(src[f"runs/{k}/vehicles/0/control"]) == 500
+            if len(src[f"runs/{k}/vehicles/0/waypoint"]) == 500
         ]
         for idx, run_key in enumerate(valid_keys, start=1):
-            new_run_id = f"run_{current_count + idx}"
+            new_run_id = f"{current_count + idx}"
             src.copy(f'runs/{run_key}', agg['runs'], name=new_run_id)
 
 

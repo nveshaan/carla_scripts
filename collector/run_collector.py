@@ -17,6 +17,16 @@ FPS = 10
 mover_threads = []
 carla_proc = None
 
+COMMAND_MAP = {
+    "VOID": -1,
+    "LEFT": 1,
+    "RIGHT": 2,
+    "STRAIGHT": 3,
+    "LANEFOLLOW": 4,
+    "CHANGELANELEFT": 5,
+    "CHANGELANERIGHT": 6
+}
+
 def parse_args():
     parser = argparse.ArgumentParser(description="CARLA Data Collection Script")
     parser.add_argument('--duration', type=int, default=50, help='Duration of each run in seconds')
@@ -33,7 +43,7 @@ def save_data_hdf5(file, run, ego, data):
         with h5py.File(file, 'a') as f:
             run_group = f.require_group(f"runs/{run}")
             vehicle_group = run_group.require_group(f"vehicles/{ego}")
-            dataset_names = ["image", "laser", "velocity", "acceleration", "location", "angular_velocity", "control"]
+            dataset_names = ["image", "laser", "velocity", "acceleration", "location", "angular_velocity", "control", "command", "waypoint"]
 
             for ds_name, d in zip(dataset_names, data):
                 d = np.array(d)
@@ -48,8 +58,10 @@ def save_data_hdf5(file, run, ego, data):
                     maxshape = (None,) + d.shape
                     vehicle_group.create_dataset(ds_name, data=d[None], maxshape=maxshape, chunks=True)
             f.flush()
+
     except Exception as e:
         print(f"[CRITICAL] Failed to save HDF5 data for run {run}: {e}")
+        print(ds_name)
         raise
 
 def move_temp_to_d_drive(temp_path, run_no):
@@ -128,7 +140,7 @@ def spawn_vehicle(world, blueprint_library, vehicle_type):
     vehicle_bp = blueprint_library.find(vehicle_type)
     return world.try_spawn_actor(vehicle_bp, spawn_point)
 
-def collect_data(world, blueprint_library, run_no, args, sensor_config):
+def collect_data(world, tm, blueprint_library, run_no, args, sensor_config):
     vehicle = spawn_vehicle(world, blueprint_library, args.vehicle)
     if vehicle is None:
         raise RuntimeError("Failed to spawn vehicle.")
@@ -160,6 +172,8 @@ def collect_data(world, blueprint_library, run_no, args, sensor_config):
                 location = vehicle.get_location()
                 angular_velocity = vehicle.get_angular_velocity()
                 control = vehicle.get_control()
+                command, waypoint = tm.get_next_action(vehicle)
+                command = COMMAND_MAP.get(str(command).upper(), -1)
 
                 data = [
                     image, laser,
@@ -167,7 +181,9 @@ def collect_data(world, blueprint_library, run_no, args, sensor_config):
                     [acceleration.x, acceleration.y, acceleration.z],
                     [location.x, location.y, location.z],
                     [angular_velocity.x, angular_velocity.y, angular_velocity.z],
-                    [control.throttle, control.steer, control.brake, control.reverse]
+                    [control.throttle, control.steer, control.brake, control.reverse],
+                    [command],
+                    [waypoint.transform.location.x, waypoint.transform.location.y, waypoint.transform.location.z]
                 ]
                 save_data_hdf5(args.temp, run_no, 0, data)
     finally:
@@ -204,24 +220,25 @@ def main():
         print("Removing existing temporary HDF5 file...")
         os.remove(args.temp)
 
-    with open('sensor_config.yaml', 'r') as file:
+    with open('configs/sensor_config.yaml', 'r') as file:
         sensor_config = yaml.safe_load(file)
 
     signal.signal(signal.SIGINT, signal_handler)
     signal.signal(signal.SIGTERM, signal_handler)
 
     carla_proc = launch_carla()
-    time.sleep(5)
+    time.sleep(10)
 
     try:
         client = carla.Client('localhost', 2000)
         client.set_timeout(10.0)
         world = client.load_world(args.map)
+        tm = client.get_trafficmanager()
         blueprint_library = world.get_blueprint_library()
 
         for run_no in range(1, args.runs + 1):
             try:
-                collect_data(world, blueprint_library, run_no, args, sensor_config)
+                collect_data(world, tm, blueprint_library, run_no, args, sensor_config)
                 backup_name = f"backup_run_{run_no}.hdf5"
                 shutil.copy(args.temp, backup_name)
                 print(f"[INFO] Backup saved: {backup_name}")
