@@ -13,12 +13,12 @@ def count_run_with_collisions(file):
     return count
 
 # === CONFIGURATION ===
-file_path = 'D:\\aggregated_runs.hdf5'
+file_path = 'D:\\marathon.hdf5'
 with h5py.File(file_path, 'r') as f:
     print(f"No. of runs: {len(f['runs'])}")
     print(f"Runs with collisions: {count_run_with_collisions(f)}")
 num = input('Enter run no. ')
-demo_key = f'run_{num}'
+demo_key = f'{num}'
 scale_factor = 3
 image_padding = 20
 lidar_scale = 2  # Scaling for LiDAR visualization
@@ -33,6 +33,8 @@ with h5py.File(file_path, 'r') as f:
     locations = group['location'][:]
     angular_velocities = group['angular_velocity'][:]
     controls = group['control'][:]
+    commands = group['command'][:]
+    waypoints = group['waypoint'][:]
 
 num_frames = len(images)
 height, width = images.shape[1:3]
@@ -129,6 +131,8 @@ def draw_info(surface, index, render_fps):
         render("Position", locations),
         render("Angular Velocity", angular_velocities),
         render("Control", controls),
+        render("Command", commands),
+        render("Waypoint", waypoints),
     ]
 
     for i, line in enumerate(info_lines):
