@@ -5,6 +5,8 @@ from typing import Sequence, Tuple, Optional
 from functools import lru_cache
 import os
 
+# TODO: one-hot encoding for command
+
 def convert_hdf5_with_chunking(
     input_path: str,
     output_path: str,
@@ -46,7 +48,7 @@ def convert_hdf5_with_chunking(
     print(f"Converted {len(data_group_in)} runs to {output_path} with chunking & compression.")
 
 
-class SampleData(torch.utils.data.dataset):
+class SampleData(torch.utils.data.Dataset):
     """
     Lazily loads multimodal sequences from a large HDF5 file for efficient training.
 
@@ -95,7 +97,8 @@ class SampleData(torch.utils.data.dataset):
     - To simplify access, consider modifying `__getitem__()` to return dictionaries instead of lists.
     """
 
-    def __init__(self, file_path: str, obs_horizon: int, act_horizon: int, gap: int, obs_freq: int, act_freq: int, obs_keys: Sequence[str], act_keys: Sequence[str], compressed: bool, cache_size: Optional[int] = 0):
+    def __init__(self, file_path: str, obs_horizon: int, act_horizon: int, gap: int, obs_freq: int, act_freq: int, obs_keys: Sequence[str], act_keys: Sequence[str], compressed: bool=False, cache_size: Optional[int] = 0):
+        super().__init__()
         self.file_path = file_path
         self.file = None
         self.cache_size = cache_size
@@ -120,7 +123,7 @@ class SampleData(torch.utils.data.dataset):
                     (obs_horizon - 1) * obs_freq +
                     gap +
                     (act_horizon - 1) * act_freq + 1)
-                
+
                 for i in range(max_index):
                     self.index_map.append((run_key, i))
                 
@@ -134,22 +137,41 @@ class SampleData(torch.utils.data.dataset):
         if self.file is None:
             self.file = h5py.File(self.file_path, 'r')
         run_key, start_idx = self.index_map[idx]
-        return self._load_sample(run_key, start_idx)
+        try:
+            result = self._load_sample(run_key, start_idx)
+            return result
+        except Exception as e:
+            print(f"Error loading sample {idx} (run_key={run_key}, start_idx={start_idx}): {e}")
+            raise
     
     def _load_sample(self, run_key: str, start_idx: int) -> Tuple[list[torch.Tensor], list[torch.Tensor]]:
         run = self.file[f'runs/{run_key}']
         obs_tensors, act_tensors = [], []
 
         for key in self.obs_keys:
-            data = run['obs'][key]
+            data = run[self.diff+key]
             idxs = [start_idx + i * self.obs_freq for i in range(self.obs_horizon)]
-            obs_tensors.append(torch.tensor(data[idxs], dtype=torch.float32))
+            if key == 'image':
+                obs_tensors.append(torch.flip(torch.tensor(data[idxs], dtype=torch.float32).squeeze()[:, :, :3], dims=[-1]).permute(2, 0, 1)) # (0, 3, 1, 2) for sequence of images # TODO: check for time-sequence per instance
+            elif key == 'location' or key == 'waypoint':
+                obs_tensors.append(torch.tensor(data[idxs, :2], dtype=torch.float32).squeeze() - torch.tensor(run[self.diff+'location'][start_idx, :2], dtype=torch.float32).squeeze())
+            elif key == 'velocity':
+                obs_tensors.append(torch.tensor(data[idxs], dtype=torch.float32).norm().unsqueeze(0))
+            else:
+                obs_tensors.append(torch.tensor(data[idxs], dtype=torch.float32).squeeze())
 
         pred_start = start_idx + (self.obs_horizon - 1) * self.obs_freq + self.gap
         for key in self.act_keys:
-            data = run[key]
-            idxs = [pred_start + i * self.pred_freq for i in range(self.pred_horizon)]
-            act_tensors.append(torch.tensor(data[idxs], dtype=torch.float32))
+            data = run[self.diff+key]
+            idxs = [pred_start + i * self.act_freq for i in range(self.act_horizon)]
+            if key == 'location' or key == 'waypoint':
+                act_tensors.append(torch.tensor(data[idxs,:2], dtype=torch.float32).squeeze() - torch.tensor(run[self.diff+'location'][start_idx, :2], dtype=torch.float32).squeeze())
+            elif key == 'velocity':
+                act_tensors.append(torch.tensor(data[idxs], dtype=torch.float32).norm().unsqueeze(0))
+            elif key == 'image':
+                act_tensors.append(torch.tensor(data[idxs], dtype=torch.float32).squeeze()[:, :, :3][..., ::-1])
+            else:
+                act_tensors.append(torch.tensor(data[idxs], dtype=torch.float32).squeeze())
 
         return act_tensors, obs_tensors
 
@@ -159,3 +181,18 @@ class SampleData(torch.utils.data.dataset):
                 self.file.close()
             except Exception:
                 pass
+
+if __name__ == "__main__":
+    sample = SampleData(
+        file_path='data/good_10_runs_18Jul.hdf5',
+        obs_horizon=1,
+        act_horizon=5,
+        gap=0,
+        obs_freq=1,
+        act_freq=1,
+        obs_keys=['image', 'velocity'],
+        act_keys=['location'])
+    
+    print(f"Length of dataset: {len(sample)}")
+    print(f"Content of one instance: {next(iter(sample))[0][0].shape}")
+    
