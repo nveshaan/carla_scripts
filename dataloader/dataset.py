@@ -173,7 +173,7 @@ class SampleData(torch.utils.data.Dataset):
             else:
                 act_tensors.append(torch.tensor(data[idxs], dtype=torch.float32).squeeze())
 
-        return act_tensors, obs_tensors
+        return obs_tensors, act_tensors
 
     def __del__(self):
         if self.file:
@@ -184,15 +184,15 @@ class SampleData(torch.utils.data.Dataset):
 
 if __name__ == "__main__":
     sample = SampleData(
-        file_path='data/good_10_runs_18Jul.hdf5',
+        file_path='D:/marathon.hdf5',
         obs_horizon=1,
         act_horizon=5,
         gap=0,
         obs_freq=1,
         act_freq=1,
-        obs_keys=['image', 'velocity'],
+        obs_keys=['image', 'velocity', 'command'],
         act_keys=['location'])
     
     print(f"Length of dataset: {len(sample)}")
-    print(f"Content of one instance: {next(iter(sample))[0][0].shape}")
+    print(f"Content of one instance: {next(iter(sample))[0][2].item()}")
     

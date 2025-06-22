@@ -7,17 +7,21 @@ import torch.optim as optimizer
 from torch.utils.data import DataLoader, random_split
 
 
-def train(dataloader, model, loss_fn, optim):
+def train(dataloader, model, loss_fn, optim, device):
     model.train()
     size = len(dataloader.dataset)
 
     for batch, (observations, actions) in enumerate(dataloader):
+        # move data to device
+        observations = [obs.to(device) for obs in observations]
+        actions = [act.to(device) for act in actions]
+
         # compute prediction and loss
         pred = model(*observations)
         loss = loss_fn(pred, *actions)
 
         # backpropagation
-        loss.backwards()
+        loss.backward()
         optim.step()
         optim.zero_grad()
 
@@ -26,14 +30,15 @@ def train(dataloader, model, loss_fn, optim):
             print(f"loss: {loss:>7f}  [{current:>5d}/{size:>5d}]")
 
 
-def val(dataloader, model, loss_fn):
+def val(dataloader, model, loss_fn, device):
     model.eval()
-    size = len(dataloader.dataset)
     num_batches = len(dataloader)
     test_loss = 0
 
     with torch.inference_mode():
         for observations, actions in dataloader:
+            observations = [obs.to(device) for obs in observations]
+            actions = [act.to(device) for act in actions]
             pred = model(*observations)
             test_loss += loss_fn(pred, *actions).item()
     
@@ -61,21 +66,22 @@ if __name__ == "__main__":
     train_size = len(dataset) - val_size
     train_dataset, val_dataset = random_split(dataset, [train_size, val_size])
 
-    train_loader = DataLoader(train_dataset, batch_size=64, shuffle=True, num_workers=4)
-    val_loader = DataLoader(val_dataset, batch_size=64, shuffle=True, num_workers=4)
+    train_loader = DataLoader(dataset, batch_size=64, shuffle=True, num_workers=4, pin_memory=True)
+    val_loader = DataLoader(val_dataset, batch_size=64, shuffle=True, num_workers=4, pin_memory=True)
 
     # set hyperparameters
     learning_rate = 1e-3
     epochs = 5
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
-    model = ImagePolicyModel(backbone='resent34').compile().to(device)
+    model = ImagePolicyModel(backbone='resnet34').to(device)
+    #model = model.compile()
     loss_fn = nn.MSELoss()
     optim = optimizer.Adam(model.parameters(), lr=learning_rate)
 
     # start training
     for t in range(epochs):
         print(f"Epoch {t+1}\n-------------------------------")
-        train(train_loader, model, loss_fn, optim)
-        val(val_loader, model, loss_fn)
+        train(train_loader, model, loss_fn, optim, device)
+        val(val_loader, model, loss_fn, device)
     print("Done!")

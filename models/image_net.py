@@ -69,7 +69,7 @@ class ImagePolicyModel(ResnetBase):
         if warp:
             ow, oh = 48, 48
         else:
-            ow, oh = 96, 40
+            ow, oh = 80, 64
 
         # Per-command prediction heads
         self.location_pred = nn.ModuleList([
@@ -106,21 +106,22 @@ class ImagePolicyModel(ResnetBase):
         h = self.conv(image)                        # Extract features from ResNet
         b, c, kh, kw = h.size()
 
-        velocity = velocity[..., None, None, None].repeat((1, 128, kh, kw))  # [B, 128, H, W]
+        if velocity.dim() == 1:
+            velocity = velocity[:, None]
+        velocity = velocity[..., None, None].repeat(1, 128, kh, kw)  # [B, 128, H, W]
         h = torch.cat((h, velocity), dim=1)         # Late fusion with image features
 
         h = self.deconv(h)                          # Upsample to prediction resolution
+        # Predict for each command branch
+        location_preds = [branch(h) for branch in self.location_pred]         # List of [B, STEPS, 2]
+        location_preds = torch.stack(location_preds, dim=1)                  # [B, COMMANDS, STEPS, 2]
 
-        # # Predict for each command branch
-        # location_preds = [branch(h) for branch in self.location_pred]         # List of [B, STEPS, 2]
-        # location_preds = torch.stack(location_preds, dim=1)                  # [B, COMMANDS, STEPS, 2]
+        # Select the output corresponding to current command
+        location_pred = select_branch(location_preds, command)               # [B, STEPS, 2]
 
-        # # Select the output corresponding to current command
-        # location_pred = select_branch(location_preds, command)               # [B, STEPS, 2]
+        if self.all_branch:
+            return location_pred, location_preds
 
-        # if self.all_branch:
-        #     return location_pred, location_preds
+        return location_pred
 
-        # return location_pred
-
-        return self.location_pred[command](h)
+        return self.location_pred[command.item()](h)

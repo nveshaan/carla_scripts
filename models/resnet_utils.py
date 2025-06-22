@@ -9,21 +9,19 @@ import torch.nn.functional as F
 from .resnet import get_resnet
 
 
-def select_branch(branches: torch.Tensor, one_hot: torch.Tensor) -> torch.Tensor:
+def select_branch(branches: torch.Tensor, command: torch.Tensor) -> torch.Tensor:
     """
-    Selects a specific branch from a stacked tensor of outputs using a one-hot vector.
+    Selects a specific branch from a stacked tensor of outputs using a command vector.
 
     Args:
-        branches (Tensor): Shape (N, B, *), where B = num branches.
-        one_hot (Tensor): Shape (N, B), one-hot encoded.
+        branches (Tensor): Shape (B, N, *), where N = num branches.
+        command (Tensor): Shape (B), command vector indicating the selected branch for each sample.
 
     Returns:
-        Tensor: Shape (N, *) for the selected branch per sample.
+        Tensor: Shape (B, *) for the selected branch per sample.
     """
-    shape = branches.size()
-    for i, s in enumerate(shape[2:]):
-        one_hot = torch.stack([one_hot for _ in range(s)], dim=i + 2)
-    return torch.sum(one_hot * branches, dim=1)
+    command = command.long()  # Ensure command is long tensor for indexing
+    return branches[torch.arange(branches.size(0)), command]
 
 
 class ResnetBase(nn.Module):
@@ -68,11 +66,13 @@ class NormalizeV2(nn.Module):
     """
     def __init__(self, mean, std):
         super().__init__()
-        self.mean = torch.FloatTensor(mean).reshape(1, 3, 1, 1).cuda()
-        self.std = torch.FloatTensor(std).reshape(1, 3, 1, 1).cuda()
+        self.mean = torch.FloatTensor(mean).reshape(1, 3, 1, 1)
+        self.std = torch.FloatTensor(std).reshape(1, 3, 1, 1)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        return (x - self.mean) / self.std
+        mean = self.mean.to(x.device)
+        std = self.std.to(x.device)
+        return (x - mean) / std
 
 
 class SpatialSoftmax(nn.Module):
