@@ -18,7 +18,7 @@ mover_threads = []
 carla_proc = None
 
 COMMAND_MAP = {
-    "VOID": -1,
+    "VOID": -1, # TODO: change to 0
     "LEFT": 1,
     "RIGHT": 2,
     "STRAIGHT": 3,
@@ -77,6 +77,9 @@ def move_temp_to_d_drive(temp_path, run_no):
     mover_threads.append(thread)
 
 class CarlaSyncMode:
+    """
+    Source: https://github.com/dotchen/LearningByCheating/blob/release-0.9.6/bird_view/models/resnet.py
+    """
     def __init__(self, world, *sensors, fps=20):
         self.world = world
         self.sensors = sensors
