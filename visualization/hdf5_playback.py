@@ -183,7 +183,7 @@ while running:
     if playing:
         frame_index = (frame_index + 1) % num_frames
 
-    frame = images[frame_index]
+    frame = images[frame_index][..., ::-1]
     surf_agent = pygame.surfarray.make_surface(frame.swapaxes(0, 1))
     surf_agent = pygame.transform.scale(surf_agent, (scaled_width, scaled_height))
 
