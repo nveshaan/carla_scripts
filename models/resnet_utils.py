@@ -43,6 +43,7 @@ class CoordConverter:
 
     Source: https://github.com/dotchen/LearningByCheating/blob/4145d33f74c9a8f27061a0f94840f3e458ecc60e/training/train_image_phase1.py#L35
     """
+    # TODO: transfer these values to config, don't hard code
     def __init__(self, w=320, h=240, fov=90.0, world_y=2.0, pitch=-10.0, fixed_offset=2.0,
                  pixels_per_meter=5.0, crop_size=192, device='cuda'):
         self._img_size = torch.FloatTensor([w, h]).to(device)

@@ -66,7 +66,7 @@ def validate_epoch(loader, model, coord_converter, loss_fn, device, epoch, log_t
 
     return total_loss / len(loader)
 
-@hydra.main(config_path="configs", config_name="configs", version_base="1.3")
+@hydra.main(config_path="configs", config_name="train_config", version_base="1.3")
 def main(cfg: DictConfig):
     print(OmegaConf.to_yaml(cfg))
     set_seed(cfg.seed)
@@ -95,7 +95,7 @@ def main(cfg: DictConfig):
     val_loader = DataLoader(val_dataset, batch_size=cfg.data.batch_size, shuffle=False,
                             num_workers=cfg.data.num_workers, pin_memory=True)
 
-    model = ImagePolicyModel(backbone=cfg.model.backbone, warp=cfg.model.warp, pretrained=cfg.model.pretrained).to(device)
+    model = ImagePolicyModel(backbone=cfg.model.backbone, warp=cfg.model.warp, pretrained=cfg.model.pretrained, steps=cfg.model.steps, commands=cfg.model.commands).to(device)
     if cfg.train.use_compile:
         model = torch.compile(model)
 

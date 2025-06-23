@@ -16,9 +16,6 @@ import torchvision.transforms.functional as tgm
 import torch
 import torch.nn as nn
 
-STEPS = 5
-COMMANDS = 7
-
 
 class ImagePolicyModel(ResnetBase):
     """
@@ -37,7 +34,7 @@ class ImagePolicyModel(ResnetBase):
         location_pred (nn.ModuleList): List of command-specific location predictors
     """
 
-    def __init__(self, backbone, warp=False, pretrained=False, all_branch=False, **kwargs):
+    def __init__(self, backbone, warp=False, pretrained=False, all_branch=False, steps=5, commands=4, **kwargs):
         super().__init__(backbone, pretrained=pretrained, input_channel=3, bias_first=False)
 
         self.c = {
@@ -69,9 +66,9 @@ class ImagePolicyModel(ResnetBase):
         self.location_pred = nn.ModuleList([
             nn.Sequential(
                 nn.BatchNorm2d(64),
-                nn.Conv2d(64, STEPS, 1, 1, 0),
-                SpatialSoftmax(48, 48, STEPS),
-            ) for _ in range(COMMANDS)
+                nn.Conv2d(64, steps, 1, 1, 0),
+                SpatialSoftmax(48, 48, steps),
+            ) for _ in range(commands)
         ])
 
         self.all_branch = all_branch

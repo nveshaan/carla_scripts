@@ -21,9 +21,11 @@ model:
   backbone: "resnet34"
   warp: False
   pretrained: False
+  steps: 5
+  commands: 4
 
 train:
-  epochs: 5
+  epochs: 1
   lr: 0.001
   use_compile: True
 
