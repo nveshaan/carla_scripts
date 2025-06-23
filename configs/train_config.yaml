@@ -11,8 +11,8 @@ data:
   obs_horizon: 1
   act_horizon: 5
   gap: 5
-  obs_freq: 1
-  act_freq: 5
+  obs_stride: 1
+  act_stride: 5
   val_ratio: 0.2
   batch_size: 64
   num_workers: 8
@@ -22,12 +22,12 @@ model:
   warp: False
   pretrained: False
   steps: 5
-  commands: 4
+  commands: 8
 
 train:
-  epochs: 1
+  epochs: 10
   lr: 0.001
-  use_compile: True
+  use_compile: False
 
 wandb:
   project: "image-policy"
