@@ -3,6 +3,7 @@ import torch.nn as nn
 import torch.optim as optim
 from torch.utils.data import DataLoader, random_split
 from models.image_net import ImagePolicyModel
+from models.resnet_utils import CoordConverter
 from dataloader.dataset import SampleData
 from omegaconf import DictConfig, OmegaConf
 import hydra
@@ -19,7 +20,7 @@ def set_seed(seed):
     torch.manual_seed(seed)
     torch.cuda.manual_seed_all(seed)
 
-def train_epoch(loader, model, loss_fn, optimizer, device, epoch, log_to_wandb):
+def train_epoch(loader, model, coord_converter, loss_fn, optimizer, device, epoch, log_to_wandb):
     model.train()
     total_loss = 0.0
 
@@ -28,7 +29,8 @@ def train_epoch(loader, model, loss_fn, optimizer, device, epoch, log_to_wandb):
         obs = [x.to(device) for x in obs]
         act = [x.to(device) for x in act]
 
-        pred = model(*obs)
+        _pred = model(*obs)
+        pred = coord_converter(_pred)
         loss = loss_fn(pred, *act)
 
         optimizer.zero_grad()
@@ -43,7 +45,7 @@ def train_epoch(loader, model, loss_fn, optimizer, device, epoch, log_to_wandb):
 
     return total_loss / len(loader)
 
-def validate_epoch(loader, model, loss_fn, device, epoch, log_to_wandb):
+def validate_epoch(loader, model, coord_converter, loss_fn, device, epoch, log_to_wandb):
     model.eval()
     total_loss = 0.0
 
@@ -53,7 +55,8 @@ def validate_epoch(loader, model, loss_fn, device, epoch, log_to_wandb):
             obs = [x.to(device) for x in obs]
             act = [x.to(device) for x in act]
 
-            pred = model(*obs)
+            _pred = model(*obs)
+            pred = coord_converter(_pred)
             loss = loss_fn(pred, *act)
             total_loss += loss.item()
             loop.set_postfix(loss=loss.item())
@@ -77,8 +80,8 @@ def main(cfg: DictConfig):
         obs_horizon=cfg.data.obs_horizon,
         act_horizon=cfg.data.act_horizon,
         gap=cfg.data.gap,
-        obs_freq=cfg.data.obs_freq,
-        act_freq=cfg.data.act_freq,
+        obs_stride=cfg.data.obs_stride,
+        act_stride=cfg.data.act_stride,
         obs_keys=cfg.data.obs_keys,
         act_keys=cfg.data.act_keys
     )
@@ -96,13 +99,14 @@ def main(cfg: DictConfig):
     if cfg.train.use_compile:
         model = torch.compile(model)
 
+    coord_converter = CoordConverter()
     loss_fn = nn.MSELoss()
     optimizer = optim.Adam(model.parameters(), lr=cfg.train.lr)
 
     for epoch in range(cfg.train.epochs):
         print(f"\n Epoch {epoch+1}/{cfg.train.epochs}")
-        train_loss = train_epoch(train_loader, model, loss_fn, optimizer, device, epoch, cfg.wandb.log)
-        val_loss = validate_epoch(val_loader, model, loss_fn, device, epoch, cfg.wandb.log)
+        train_loss = train_epoch(train_loader, model, coord_converter, loss_fn, optimizer, device, epoch, cfg.wandb.log)
+        val_loss = validate_epoch(val_loader, model, coord_converter, loss_fn, device, epoch, cfg.wandb.log)
 
         print(f" Train Loss: {train_loss:.6f} | Val Loss: {val_loss:.6f}")
 

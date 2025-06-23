@@ -65,9 +65,9 @@ class SampleData(Dataset):
         Number of future actions to predict (default is 16).
     gap : int, optional
         Number of timesteps between the last observation and first predicted action (default is 0).
-    obs_freq : int, optional
+    obs_stride : int, optional
         Temporal stride for observation sampling (default is 1).
-    act_freq : int, optional
+    act_stride : int, optional
         Temporal stride for predicted action sampling (default is 1).
     cache_size : int or None, optional
         If set, enables LRU caching of recent samples (default is 0 = no caching).
@@ -96,7 +96,7 @@ class SampleData(Dataset):
     - To simplify access, consider modifying `__getitem__()` to return dictionaries instead of lists.
     """
 
-    def __init__(self, file_path: str, obs_horizon: int, act_horizon: int, gap: int, obs_freq: int, act_freq: int, obs_keys: Sequence[str], act_keys: Sequence[str], compressed: bool=False, cache_size: Optional[int] = 0) -> Dataset:
+    def __init__(self, file_path: str, obs_horizon: int, act_horizon: int, gap: int, obs_stride: int, act_stride: int, obs_keys: Sequence[str], act_keys: Sequence[str], compressed: bool=False, cache_size: Optional[int] = 0) -> Dataset:
         super().__init__()
         self.file_path = file_path
         self.file = None
@@ -105,8 +105,8 @@ class SampleData(Dataset):
         self.obs_horizon = obs_horizon
         self.act_horizon = act_horizon
         self.gap = gap
-        self.obs_freq = obs_freq
-        self.act_freq = act_freq
+        self.obs_stride = obs_stride
+        self.act_stride = act_stride
         self.obs_keys = obs_keys
         self.act_keys = act_keys
 
@@ -119,9 +119,9 @@ class SampleData(Dataset):
                 run = f[f'runs/{run_key}']
                 total_frames = len(run[f'{self.diff}control'])
                 max_index = total_frames - (
-                    (obs_horizon - 1) * obs_freq +
+                    (obs_horizon - 1) * obs_stride +
                     gap +
-                    (act_horizon - 1) * act_freq + 1)
+                    (act_horizon - 1) * act_stride + 1)
 
                 for i in range(max_index):
                     self.index_map.append((run_key, i))
@@ -149,7 +149,7 @@ class SampleData(Dataset):
 
         for key in self.obs_keys:
             data = run[self.diff+key]
-            idxs = [start_idx + i * self.obs_freq for i in range(self.obs_horizon)]
+            idxs = [start_idx + i * self.obs_stride for i in range(self.obs_horizon)]
             if key == 'image':
                 obs_tensors.append(torch.stack([torch.flip(torch.tensor(data[i], dtype=torch.float32)[:, :, :3], dims=[-1]).permute(2, 0, 1)
                                                     for i in idxs]).squeeze())
@@ -158,10 +158,10 @@ class SampleData(Dataset):
             else:
                 obs_tensors.append(torch.tensor(data[idxs], dtype=torch.float32).squeeze())
 
-        pred_start = start_idx + (self.obs_horizon - 1) * self.obs_freq + self.gap
+        pred_start = start_idx + (self.obs_horizon - 1) * self.obs_stride + self.gap
         for key in self.act_keys:
             data = run[self.diff+key]
-            idxs = [pred_start + i * self.act_freq for i in range(self.act_horizon)]
+            idxs = [pred_start + i * self.act_stride for i in range(self.act_horizon)]
             if key == 'location' or key == 'waypoint':
                 act_tensors.append(torch.tensor(data[idxs,:2], dtype=torch.float32).squeeze() - torch.tensor(run[self.diff+'location'][start_idx, :2], dtype=torch.float32).squeeze())
             else:
@@ -182,8 +182,8 @@ if __name__ == "__main__":
         obs_horizon=1,
         act_horizon=5,
         gap=0,
-        obs_freq=1,
-        act_freq=1,
+        obs_stride=1,
+        act_stride=1,
         obs_keys=['image', 'velocity', 'command'],
         act_keys=['location'])
     
