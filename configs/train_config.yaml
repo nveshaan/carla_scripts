@@ -5,7 +5,7 @@ defaults:
 
 seed: 42
 data:
-  file_path: "D:/marathon.hdf5"
+  file_path: "D:marathon.hdf5"
   obs_keys: ["image", "velocity", "command"]
   act_keys: ["location"]
   obs_horizon: 1
@@ -15,19 +15,21 @@ data:
   act_stride: 5
   val_ratio: 0.2
   batch_size: 64
-  num_workers: 8
+  num_workers: 2
 
 model:
   backbone: "resnet34"
   warp: False
   pretrained: False
   steps: 5
-  commands: 8
+  commands: 5
 
 train:
   epochs: 10
   lr: 0.001
   use_compile: False
+  save: True
+  epoch_save: True
 
 wandb:
   project: "image-policy"

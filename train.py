@@ -12,7 +12,9 @@ import wandb
 import random
 import numpy as np
 import datetime
+import os
 
+# os.environ["PYTORCH_CUDA_ALLOC_CONF"] = "expandable_segments:True"
 
 def set_seed(seed):
     random.seed(seed)
@@ -24,7 +26,7 @@ def train_epoch(loader, model, coord_converter, loss_fn, optimizer, device, epoc
     model.train()
     total_loss = 0.0
 
-    loop = tqdm(loader, desc=f"Epoch {epoch} [Train]", leave=False)
+    loop = tqdm(loader, desc=f"Epoch {epoch+1} [Train]", leave=False)
     for batch_idx, (obs, act) in enumerate(loop):
         obs = [x.to(device) for x in obs]
         act = [x.to(device) for x in act]
@@ -50,7 +52,7 @@ def validate_epoch(loader, model, coord_converter, loss_fn, device, epoch, log_t
     total_loss = 0.0
 
     with torch.inference_mode():
-        loop = tqdm(loader, desc=f"Epoch {epoch} [Val]", leave=False)
+        loop = tqdm(loader, desc=f"Epoch {epoch+1} [Val]", leave=False)
         for batch_idx, (obs, act) in enumerate(loop):
             obs = [x.to(device) for x in obs]
             act = [x.to(device) for x in act]
@@ -61,14 +63,10 @@ def validate_epoch(loader, model, coord_converter, loss_fn, device, epoch, log_t
             total_loss += loss.item()
             loop.set_postfix(loss=loss.item())
 
-            if log_to_wandb:
-                wandb.log({"val/loss": loss.item()}, step=epoch * len(loader) + batch_idx)
-
     return total_loss / len(loader)
 
 @hydra.main(config_path="configs", config_name="train_config", version_base="1.3")
 def main(cfg: DictConfig):
-    print(OmegaConf.to_yaml(cfg))
     set_seed(cfg.seed)
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
@@ -110,6 +108,11 @@ def main(cfg: DictConfig):
 
         print(f" Train Loss: {train_loss:.6f} | Val Loss: {val_loss:.6f}")
 
+        if cfg.train.epoch_save:
+            os.makedirs(os.path.dirname(f'checkpoints/{datetime.datetime.now().strftime("%m%d_%H%M")}_epoch{epoch+1}.pth'), exist_ok=True)
+            torch.save(model.state_dict(), f'checkpoints/{datetime.datetime.now().strftime("%m%d_%H%M")}_epoch{epoch+1}.pth')
+            print(f"\nCheckpoint saved successfully.")
+
         if cfg.wandb.log:
             wandb.log({
                 "epoch": epoch + 1,
@@ -118,8 +121,11 @@ def main(cfg: DictConfig):
             })
 
     print("Training complete.")
-    torch.save(model.state_dict(), f'checkpoints/{datetime.datetime.now().strftime("%m%d_%H%M")}_model.pth')
-    print(f"\nModel saved successfully.")
+
+    if cfg.train.save:
+        os.makedirs(os.path.dirname(f'checkpoints/{datetime.datetime.now().strftime("%m%d_%H%M")}_model.pth'), exist_ok=True)
+        torch.save(model.state_dict(), f'checkpoints/{datetime.datetime.now().strftime("%m%d_%H%M")}_model.pth')
+        print(f"\nModel saved successfully.")
 
     if cfg.wandb.log:
         wandb.finish()
