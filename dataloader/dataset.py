@@ -5,7 +5,6 @@ from typing import Sequence, Tuple, Optional
 from functools import lru_cache
 import os
 
-# TODO: one-hot encoding for command
 
 def convert_hdf5_with_chunking(
     input_path: str,
@@ -48,7 +47,7 @@ def convert_hdf5_with_chunking(
     print(f"Converted {len(data_group_in)} runs to {output_path} with chunking & compression.")
 
 
-class SampleData(torch.utils.data.Dataset):
+class SampleData(Dataset):
     """
     Lazily loads multimodal sequences from a large HDF5 file for efficient training.
 
@@ -97,7 +96,7 @@ class SampleData(torch.utils.data.Dataset):
     - To simplify access, consider modifying `__getitem__()` to return dictionaries instead of lists.
     """
 
-    def __init__(self, file_path: str, obs_horizon: int, act_horizon: int, gap: int, obs_freq: int, act_freq: int, obs_keys: Sequence[str], act_keys: Sequence[str], compressed: bool=False, cache_size: Optional[int] = 0):
+    def __init__(self, file_path: str, obs_horizon: int, act_horizon: int, gap: int, obs_freq: int, act_freq: int, obs_keys: Sequence[str], act_keys: Sequence[str], compressed: bool=False, cache_size: Optional[int] = 0) -> Dataset:
         super().__init__()
         self.file_path = file_path
         self.file = None
@@ -152,9 +151,8 @@ class SampleData(torch.utils.data.Dataset):
             data = run[self.diff+key]
             idxs = [start_idx + i * self.obs_freq for i in range(self.obs_horizon)]
             if key == 'image':
-                obs_tensors.append(torch.flip(torch.tensor(data[idxs], dtype=torch.float32).squeeze()[:, :, :3], dims=[-1]).permute(2, 0, 1)) # (0, 3, 1, 2) for sequence of images # TODO: check for time-sequence per instance
-            elif key == 'location' or key == 'waypoint':
-                obs_tensors.append(torch.tensor(data[idxs, :2], dtype=torch.float32).squeeze() - torch.tensor(run[self.diff+'location'][start_idx, :2], dtype=torch.float32).squeeze())
+                obs_tensors.append(torch.stack([torch.flip(torch.tensor(data[i], dtype=torch.float32)[:, :, :3], dims=[-1]).permute(2, 0, 1)
+                                                    for i in idxs]).squeeze())
             elif key == 'velocity':
                 obs_tensors.append(torch.tensor(data[idxs], dtype=torch.float32).norm().unsqueeze(0))
             else:
@@ -166,10 +164,6 @@ class SampleData(torch.utils.data.Dataset):
             idxs = [pred_start + i * self.act_freq for i in range(self.act_horizon)]
             if key == 'location' or key == 'waypoint':
                 act_tensors.append(torch.tensor(data[idxs,:2], dtype=torch.float32).squeeze() - torch.tensor(run[self.diff+'location'][start_idx, :2], dtype=torch.float32).squeeze())
-            elif key == 'velocity':
-                act_tensors.append(torch.tensor(data[idxs], dtype=torch.float32).norm().unsqueeze(0))
-            elif key == 'image':
-                act_tensors.append(torch.tensor(data[idxs], dtype=torch.float32).squeeze()[:, :, :3][..., ::-1])
             else:
                 act_tensors.append(torch.tensor(data[idxs], dtype=torch.float32).squeeze())
 

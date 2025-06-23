@@ -65,18 +65,12 @@ class ImagePolicyModel(ResnetBase):
             nn.ReLU(True),
         )
 
-        # Output map size after deconv
-        if warp:
-            ow, oh = 48, 48
-        else:
-            ow, oh = 80, 64
-
         # Per-command prediction heads
         self.location_pred = nn.ModuleList([
             nn.Sequential(
                 nn.BatchNorm2d(64),
                 nn.Conv2d(64, STEPS, 1, 1, 0),
-                SpatialSoftmax(ow, oh, STEPS),
+                SpatialSoftmax(48, 48, STEPS),
             ) for _ in range(COMMANDS)
         ])
 
@@ -96,32 +90,30 @@ class ImagePolicyModel(ResnetBase):
             location_preds (Tensor, optional): [B, COMMANDS, STEPS, 2] — all command predictions (if all_branch=True)
         """
 
-        # Optional warp block (disabled here)
-        # if self.warp:
-        #     warped_image = tgm.warp_perspective(image, self.M, dsize=(192, 192))
-        #     resized_image = resize_images(image)
-        #     image = torch.cat([warped_image, resized_image], 1)
-
+        if self.warp:
+            warped_image = tgm.warp_perspective(image, self.M, dsize=(192, 192))
+            resized_image = tgm.resize(image, (192, 192))
+            image = torch.cat([warped_image, resized_image], 1)
+        else:
+            image = tgm.resize(image, (192, 192))
+        
         image = self.rgb_transform(image)           # Normalize input
         h = self.conv(image)                        # Extract features from ResNet
         b, c, kh, kw = h.size()
 
         if velocity.dim() == 1:
             velocity = velocity[:, None]
-        velocity = velocity[..., None, None].repeat(1, 128, kh, kw)  # [B, 128, H, W]
-        h = torch.cat((h, velocity), dim=1)         # Late fusion with image features
+        velocity = velocity[..., None, None].repeat(1, 128, kh, kw)           # [B, 128, H, W]
+        h = torch.cat((h, velocity), dim=1)                                   # Late fusion with image features
 
-        h = self.deconv(h)                          # Upsample to prediction resolution
-        # Predict for each command branch
+        h = self.deconv(h)     
+
         location_preds = [branch(h) for branch in self.location_pred]         # List of [B, STEPS, 2]
-        location_preds = torch.stack(location_preds, dim=1)                  # [B, COMMANDS, STEPS, 2]
+        location_preds = torch.stack(location_preds, dim=1)                   # [B, COMMANDS, STEPS, 2]
 
-        # Select the output corresponding to current command
-        location_pred = select_branch(location_preds, command)               # [B, STEPS, 2]
+        location_pred = select_branch(location_preds, command)                # [B, STEPS, 2]
 
         if self.all_branch:
             return location_pred, location_preds
 
         return location_pred
-
-        return self.location_pred[command.item()](h)

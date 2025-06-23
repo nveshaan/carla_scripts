@@ -1,87 +1,125 @@
-from models.image_net import ImagePolicyModel
-from dataloader.dataset import SampleData
-
 import torch
 import torch.nn as nn
-import torch.optim as optimizer
+import torch.optim as optim
 from torch.utils.data import DataLoader, random_split
+from models.image_net import ImagePolicyModel
+from dataloader.dataset import SampleData
+from omegaconf import DictConfig, OmegaConf
+import hydra
+from tqdm import tqdm
+import wandb
+import random
+import numpy as np
+import datetime
 
 
-def train(dataloader, model, loss_fn, optim, device):
+def set_seed(seed):
+    random.seed(seed)
+    np.random.seed(seed)
+    torch.manual_seed(seed)
+    torch.cuda.manual_seed_all(seed)
+
+def train_epoch(loader, model, loss_fn, optimizer, device, epoch, log_to_wandb):
     model.train()
-    size = len(dataloader.dataset)
+    total_loss = 0.0
 
-    for batch, (observations, actions) in enumerate(dataloader):
-        # move data to device
-        observations = [obs.to(device) for obs in observations]
-        actions = [act.to(device) for act in actions]
+    loop = tqdm(loader, desc=f"Epoch {epoch} [Train]", leave=False)
+    for batch_idx, (obs, act) in enumerate(loop):
+        obs = [x.to(device) for x in obs]
+        act = [x.to(device) for x in act]
 
-        # compute prediction and loss
-        pred = model(*observations)
-        loss = loss_fn(pred, *actions)
+        pred = model(*obs)
+        loss = loss_fn(pred, *act)
 
-        # backpropagation
+        optimizer.zero_grad()
         loss.backward()
-        optim.step()
-        optim.zero_grad()
+        optimizer.step()
 
-        if batch % 100 == 0:
-            loss, current = loss.item(), batch * 64 + len(observations[0])
-            print(f"loss: {loss:>7f}  [{current:>5d}/{size:>5d}]")
+        total_loss += loss.item()
+        loop.set_postfix(loss=loss.item())
 
+        if log_to_wandb:
+            wandb.log({"train/loss": loss.item()}, step=epoch * len(loader) + batch_idx)
 
-def val(dataloader, model, loss_fn, device):
+    return total_loss / len(loader)
+
+def validate_epoch(loader, model, loss_fn, device, epoch, log_to_wandb):
     model.eval()
-    num_batches = len(dataloader)
-    test_loss = 0
+    total_loss = 0.0
 
     with torch.inference_mode():
-        for observations, actions in dataloader:
-            observations = [obs.to(device) for obs in observations]
-            actions = [act.to(device) for act in actions]
-            pred = model(*observations)
-            test_loss += loss_fn(pred, *actions).item()
-    
-    test_loss /= num_batches
-    print(f"Test Error: \n Avg loss: {test_loss:>8f} \n")
+        loop = tqdm(loader, desc=f"Epoch {epoch} [Val]", leave=False)
+        for batch_idx, (obs, act) in enumerate(loop):
+            obs = [x.to(device) for x in obs]
+            act = [x.to(device) for x in act]
 
+            pred = model(*obs)
+            loss = loss_fn(pred, *act)
+            total_loss += loss.item()
+            loop.set_postfix(loss=loss.item())
 
-if __name__ == "__main__":
-    print("Starting training...")
+            if log_to_wandb:
+                wandb.log({"val/loss": loss.item()}, step=epoch * len(loader) + batch_idx)
 
-    # load data
+    return total_loss / len(loader)
+
+@hydra.main(config_path="configs", config_name="configs", version_base="1.3")
+def main(cfg: DictConfig):
+    print(OmegaConf.to_yaml(cfg))
+    set_seed(cfg.seed)
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
+    if cfg.wandb.log:
+        wandb.init(project=cfg.wandb.project, name=cfg.wandb.name, config=OmegaConf.to_container(cfg))
+
     dataset = SampleData(
-        file_path='D:/marathon.hdf5',
-        obs_horizon=1,
-        act_horizon=5,
-        gap=0,
-        obs_freq=1,
-        act_freq=1,
-        obs_keys=['image', 'velocity', 'command'],
-        act_keys=['location']
+        file_path=cfg.data.file_path,
+        obs_horizon=cfg.data.obs_horizon,
+        act_horizon=cfg.data.act_horizon,
+        gap=cfg.data.gap,
+        obs_freq=cfg.data.obs_freq,
+        act_freq=cfg.data.act_freq,
+        obs_keys=cfg.data.obs_keys,
+        act_keys=cfg.data.act_keys
     )
 
-    val_ratio = 0.2
-    val_size = int(len(dataset) * val_ratio)
+    val_size = int(len(dataset) * cfg.data.val_ratio)
     train_size = len(dataset) - val_size
     train_dataset, val_dataset = random_split(dataset, [train_size, val_size])
 
-    train_loader = DataLoader(dataset, batch_size=64, shuffle=True, num_workers=4, pin_memory=True)
-    val_loader = DataLoader(val_dataset, batch_size=64, shuffle=True, num_workers=4, pin_memory=True)
+    train_loader = DataLoader(train_dataset, batch_size=cfg.data.batch_size, shuffle=True,
+                              num_workers=cfg.data.num_workers, pin_memory=True)
+    val_loader = DataLoader(val_dataset, batch_size=cfg.data.batch_size, shuffle=False,
+                            num_workers=cfg.data.num_workers, pin_memory=True)
 
-    # set hyperparameters
-    learning_rate = 1e-3
-    epochs = 5
-    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+    model = ImagePolicyModel(backbone=cfg.model.backbone, warp=cfg.model.warp, pretrained=cfg.model.pretrained).to(device)
+    if cfg.train.use_compile:
+        model = torch.compile(model)
 
-    model = ImagePolicyModel(backbone='resnet34').to(device)
-    #model = model.compile()
     loss_fn = nn.MSELoss()
-    optim = optimizer.Adam(model.parameters(), lr=learning_rate)
+    optimizer = optim.Adam(model.parameters(), lr=cfg.train.lr)
 
-    # start training
-    for t in range(epochs):
-        print(f"Epoch {t+1}\n-------------------------------")
-        train(train_loader, model, loss_fn, optim, device)
-        val(val_loader, model, loss_fn, device)
-    print("Done!")
+    for epoch in range(cfg.train.epochs):
+        print(f"\n Epoch {epoch+1}/{cfg.train.epochs}")
+        train_loss = train_epoch(train_loader, model, loss_fn, optimizer, device, epoch, cfg.wandb.log)
+        val_loss = validate_epoch(val_loader, model, loss_fn, device, epoch, cfg.wandb.log)
+
+        print(f" Train Loss: {train_loss:.6f} | Val Loss: {val_loss:.6f}")
+
+        if cfg.wandb.log:
+            wandb.log({
+                "epoch": epoch + 1,
+                "train/avg_loss": train_loss,
+                "val/avg_loss": val_loss
+            })
+
+    print("Training complete.")
+    torch.save(model.state_dict(), f'checkpoints/{datetime.datetime.now().strftime("%m%d_%H%M")}_model.pth')
+    print(f"\nModel saved successfully.")
+
+    if cfg.wandb.log:
+        wandb.finish()
+
+
+if __name__ == "__main__":
+    main()

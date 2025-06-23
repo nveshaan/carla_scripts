@@ -1,0 +1,33 @@
+# config/config.yaml
+
+defaults:
+  - override hydra/job_logging: disabled  # Optional: disable hydra logs
+
+seed: 42
+data:
+  file_path: "D:/marathon.hdf5"
+  obs_keys: ["image", "velocity", "command"]
+  act_keys: ["location"]
+  obs_horizon: 1
+  act_horizon: 5
+  gap: 0
+  obs_freq: 1
+  act_freq: 1
+  val_ratio: 0.2
+  batch_size: 64
+  num_workers: 8
+
+model:
+  backbone: "resnet34"
+  warp: True
+  pretrained: True
+
+train:
+  epochs: 5
+  lr: 0.001
+  use_compile: True
+
+wandb:
+  project: "image-policy"
+  name: "resnet34-run"
+  log: True
