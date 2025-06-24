@@ -3,7 +3,7 @@ import torch.nn as nn
 import torch.optim as optim
 from torch.utils.data import DataLoader, random_split
 from models.image_net import ImagePolicyModel
-from models.resnet_utils import CoordConverter
+from models.resnet_utils import CoordConverter, OGCoordConverter
 from dataloader.dataset import SampleData
 from omegaconf import DictConfig, OmegaConf
 import hydra
@@ -33,7 +33,7 @@ def train_epoch(loader, model, coord_converter, loss_fn, optimizer, device, epoc
 
         _pred = model(*obs)
         pred = coord_converter(_pred)
-        loss = loss_fn(pred, *act)
+        loss = loss_fn(_pred, *act)
 
         optimizer.zero_grad()
         loss.backward()
@@ -59,7 +59,7 @@ def validate_epoch(loader, model, coord_converter, loss_fn, device, epoch, log_t
 
             _pred = model(*obs)
             pred = coord_converter(_pred)
-            loss = loss_fn(pred, *act)
+            loss = loss_fn(_pred, *act)
             total_loss += loss.item()
             loop.set_postfix(loss=loss.item())
 
@@ -97,7 +97,7 @@ def main(cfg: DictConfig):
     if cfg.train.use_compile:
         model = torch.compile(model)
 
-    coord_converter = CoordConverter()
+    coord_converter = CoordConverter(device=device)
     loss_fn = nn.MSELoss()
     optimizer = optim.Adam(model.parameters(), lr=cfg.train.lr)
 

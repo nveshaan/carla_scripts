@@ -109,6 +109,39 @@ class CoordConverter:
         map_output[..., 1] += self._fixed_offset * self._ppm  # push Y down
 
         return map_output
+    
+
+class OGCoordConverter:
+    def __init__(self, w=320, h=240, fov=90, world_y=2.0, fixed_offset=2.0, device='cuda', pixels_per_meter=5.0, crop_size=192):
+        self._img_size = torch.FloatTensor([w,h]).to(device)
+        self.ppm = pixels_per_meter
+        self.crop_size = crop_size
+        self._fov = fov
+        self._world_y = world_y
+        self._fixed_offset = fixed_offset
+    
+    def __call__(self, camera_locations):
+        camera_locations = (camera_locations + 1) * self._img_size/2
+        w, h = self._img_size
+        
+        cx, cy = w/2, h/2
+
+        f = w /(2 * np.tan(self._fov * np.pi / 360))
+    
+        xt = (camera_locations[...,0] - cx) / f
+        yt = (camera_locations[...,1] - cy) / f
+
+        world_z = self._world_y / yt
+        world_x = world_z * xt
+        
+        map_output = torch.stack([world_x, world_z],dim=-1)
+    
+        map_output *= self.ppm
+        map_output[...,1] = self.crop_size - map_output[...,1]
+        map_output[...,0] += self.crop_size/2
+        map_output[...,1] += self._fixed_offset*self.ppm
+        
+        return map_output
 
 
 class ResnetBase(nn.Module):
@@ -187,6 +220,7 @@ class SpatialSoftmax(nn.Module):
         self.temperature = nn.Parameter(torch.ones(1) * temperature) if temperature else 1.0
 
         # FIXME: x and y are reversed here, do check it out if you face any problems
+        # NOTE: considerably low loss when yx than xy, check BZ version
         pos_y, pos_x = np.meshgrid(
             np.linspace(-1., 1., self.height),
             np.linspace(-1., 1., self.width)

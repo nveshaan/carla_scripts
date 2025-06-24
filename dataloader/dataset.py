@@ -163,7 +163,7 @@ class SampleData(Dataset):
             data = run[self.diff+key]
             idxs = [pred_start + i * self.act_stride for i in range(self.act_horizon)]
             if key == 'location' or key == 'waypoint':
-                act_tensors.append(torch.tensor(data[idxs,:2], dtype=torch.float32).squeeze() - torch.tensor(run[self.diff+'location'][start_idx, :2], dtype=torch.float32).squeeze())
+                act_tensors.append(torch.abs(torch.tensor(data[idxs,:2], dtype=torch.float32).squeeze() - torch.tensor(run[self.diff+'location'][start_idx, :2], dtype=torch.float32).squeeze()))
             else:
                 act_tensors.append(torch.tensor(data[idxs], dtype=torch.float32).squeeze())
 

@@ -34,7 +34,7 @@ class ImagePolicyModel(ResnetBase):
         location_pred (nn.ModuleList): List of command-specific location predictors
     """
 
-    def __init__(self, backbone, warp=False, pretrained=False, all_branch=False, steps=5, commands=4, **kwargs):
+    def __init__(self, backbone, warp=False, pretrained=False, all_branch=False, steps=5, commands=5, **kwargs):
         super().__init__(backbone, pretrained=pretrained, input_channel=3, bias_first=False)
 
         self.c = {
