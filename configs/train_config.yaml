@@ -5,7 +5,7 @@ defaults:
 
 seed: 42
 data:
-  file_path: "D:marathon.hdf5"
+  file_path: "data/sprint.hdf5"
   obs_keys: ["image", "velocity", "command"]
   act_keys: ["location"]
   obs_horizon: 1
@@ -28,10 +28,10 @@ train:
   epochs: 10
   lr: 0.001
   use_compile: False
-  save: True
-  epoch_save: True
+  save: False
+  epoch_save: False
 
 wandb:
   project: "image-policy"
   name: "resnet34-run"
-  log: True
+  log: False
