@@ -25,6 +25,12 @@ def select_branch(branches: torch.Tensor, command: torch.Tensor) -> torch.Tensor
     return branches[torch.arange(branches.size(0)), command]
 
 
+class PixelToWorld(nn.Module):
+    def __init__(self, steps):
+        super().__init__()
+
+
+
 class ResnetBase(nn.Module):
     def __init__(self, backbone, input_channel=3, bias_first=True, pretrained=False):
         super().__init__()
@@ -100,9 +106,8 @@ class SpatialSoftmax(nn.Module):
 
         self.temperature = nn.Parameter(torch.ones(1) * temperature) if temperature else 1.0
 
-        # FIXME: x and y are reversed here, do check it out if you face any problems
-        # NOTE: considerably low loss when yx than xy, check BZ version
-        pos_y, pos_x = np.meshgrid(
+        # NOTE: x is distance ahead, y is left/right
+        pos_x, pos_y = np.meshgrid(
             np.linspace(-1., 1., self.height),
             np.linspace(-1., 1., self.width)
         )
@@ -124,18 +129,6 @@ class SpatialSoftmax(nn.Module):
 
 
 class SpatialSoftmaxBZ(nn.Module):
-    """
-    Computes softmax-based spatial centroids using custom coordinate mapping:
-        - x in [-1, 1], left to right
-        - y in [0, 1], bottom to top
-
-    Input shape:  (N, C, H, W)
-    Output shape: (N, C, 2)
-
-    Example:
-        softmax = SpatialSoftmaxBZ(height=64, width=64)
-        out = softmax(torch.rand(8, 32, 64, 64))  # out.shape: (8, 32, 2)
-    """
     def __init__(self, height: int, width: int):
         super().__init__()
         self.height = height

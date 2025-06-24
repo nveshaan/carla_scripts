@@ -15,7 +15,7 @@ dataset = SampleData("data/run.hdf5", 1, 5, 5, 1, 5, ["image", "velocity", "comm
 dataloader = DataLoader(dataset, 1, shuffle=False)
 
 model = ImagePolicyModel(backbone="resnet34")
-model.load_state_dict(torch.load("checkpoints/0624_1832_model.pth", map_location=device, weights_only=True))
+model.load_state_dict(torch.load("checkpoints/0625_0118_model.pth", map_location=device, weights_only=True))
 model.to(device)
 model.eval()
 

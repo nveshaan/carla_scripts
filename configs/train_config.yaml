@@ -14,18 +14,17 @@ data:
   obs_stride: 1
   act_stride: 5
   val_ratio: 0.2
-  batch_size: 128
+  batch_size: 64
   num_workers: 2
 
 model:
   backbone: "resnet34"
-  warp: False
-  pretrained: True
+  pretrained: False
   steps: 5
   commands: 5
 
 train:
-  epochs: 5
+  epochs: 3
   lr: 0.001
   use_compile: False
   save: True

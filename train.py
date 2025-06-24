@@ -90,7 +90,7 @@ def main(cfg: DictConfig):
     val_loader = DataLoader(val_dataset, batch_size=cfg.data.batch_size, shuffle=False,
                             num_workers=cfg.data.num_workers, pin_memory=True)
 
-    model = ImagePolicyModel(backbone=cfg.model.backbone, warp=cfg.model.warp, pretrained=cfg.model.pretrained, steps=cfg.model.steps, commands=cfg.model.commands).to(device)
+    model = ImagePolicyModel(backbone=cfg.model.backbone, pretrained=cfg.model.pretrained, steps=cfg.model.steps, commands=cfg.model.commands).to(device)
     if cfg.train.use_compile:
         model = torch.compile(model)
 

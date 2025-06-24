@@ -34,7 +34,7 @@ class ImagePolicyModel(ResnetBase):
         location_pred (nn.ModuleList): List of command-specific location predictors
     """
 
-    def __init__(self, backbone, warp=False, pretrained=False, all_branch=False, steps=5, commands=5, **kwargs):
+    def __init__(self, backbone, pretrained=False, all_branch=False, steps=5, commands=5, **kwargs):
         super().__init__(backbone, pretrained=pretrained, input_channel=3, bias_first=False)
 
         self.c = {
@@ -43,7 +43,6 @@ class ImagePolicyModel(ResnetBase):
             'resnet50': 2048
         }[backbone]
 
-        self.warp = warp
         self.rgb_transform = NormalizeV2(
             mean=[0.485, 0.456, 0.406],  # TODO: Replace with dataset-specific statistics
             std=[0.229, 0.224, 0.225]
@@ -87,13 +86,7 @@ class ImagePolicyModel(ResnetBase):
             location_preds (Tensor, optional): [B, COMMANDS, STEPS, 2] — all command predictions (if all_branch=True)
         """
 
-        if self.warp:
-            warped_image = tgm.warp_perspective(image, self.M, dsize=(192, 192))
-            resized_image = tgm.resize(image, (192, 192))
-            image = torch.cat([warped_image, resized_image], 1)
-        else:
-            image = tgm.resize(image, (192, 192))
-        
+        image = tgm.resize(image, (192, 192))
         image = self.rgb_transform(image)           # Normalize input
         h = self.conv(image)                        # Extract features from ResNet
         b, c, kh, kw = h.size()
