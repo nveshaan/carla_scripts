@@ -8,7 +8,6 @@ Input:
 Output:
 -------
 - `location_pred`: Tensor of shape `[B, STEPS, 2]` — predicted spatial (x, y) locations
-- (Optional) `location_preds`: Tensor of shape `[B, COMMANDS, STEPS, 2]` — all branch predictions
 """
 
 from .network_utils import ResnetBase, NormalizeV2, SpatialSoftmaxV2, select_branch
@@ -82,7 +81,6 @@ class ImagePolicyModel(ResnetBase):
 
         Returns:
             location_pred (Tensor): [B, STEPS, 2] — (x, y) waypoints for the selected command
-            location_preds (Tensor, optional): [B, COMMANDS, STEPS, 2] — all command predictions (if all_branch=True)
         """
 
         image = tf.resize(image, (192, 192))

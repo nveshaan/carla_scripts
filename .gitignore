@@ -2,6 +2,11 @@
 *.hdf5
 __pycache__/
 checkpoints/
+*pth
 *.pyc
 wandb/
 outputs/
+env/*
+!env/requirements.txt
+!env/environment.yml
+!env/environment.yaml

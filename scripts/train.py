@@ -1,3 +1,7 @@
+import sys
+import os
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+
 import torch
 import torch.nn as nn
 import torch.optim as optim
@@ -11,7 +15,6 @@ import wandb
 import random
 import numpy as np
 import datetime
-import os
 
 # os.environ["PYTORCH_CUDA_ALLOC_CONF"] = "expandable_segments:True"
 
@@ -62,7 +65,7 @@ def validate_epoch(loader, model, loss_fn, device, epoch, log_to_wandb):
 
     return total_loss / len(loader)
 
-@hydra.main(config_path="configs", config_name="train_config", version_base="1.3")
+@hydra.main(config_path="../configs", config_name="train_config", version_base="1.3")
 def main(cfg: DictConfig):
     set_seed(cfg.seed)
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")

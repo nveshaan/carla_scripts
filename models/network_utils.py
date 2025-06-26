@@ -3,7 +3,6 @@ Source: https://github.com/dotchen/LearningByCheating/blob/release-0.9.6/bird_vi
 """
 
 import numpy as np
-import math
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
