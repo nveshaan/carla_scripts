@@ -5,6 +5,7 @@ from typing import Sequence, Tuple, Optional
 from functools import lru_cache
 import os
 import numpy as np
+from math import pi
 
 
 def convert_hdf5_with_chunking(
@@ -97,11 +98,12 @@ class SampleData(Dataset):
     - To simplify access, consider modifying `__getitem__()` to return dictionaries instead of lists.
     """
 
-    def __init__(self, file_path: str, obs_horizon: int, act_horizon: int, gap: int, obs_stride: int, act_stride: int, obs_keys: Sequence[str], act_keys: Sequence[str], compressed: bool=False, cache_size: Optional[int] = 0) -> Dataset:
+    def __init__(self, file_path: str, obs_horizon: int, act_horizon: int, gap: int, obs_stride: int, act_stride: int, obs_keys: Sequence[str], act_keys: Sequence[str], skip: int=10, compressed: bool=False, cache_size: Optional[int] = 0) -> Dataset:
         super().__init__()
         self.file_path = file_path
         self.file = None
         self.cache_size = cache_size
+        self.skip = skip
 
         self.obs_horizon = obs_horizon
         self.act_horizon = act_horizon
@@ -124,7 +126,7 @@ class SampleData(Dataset):
                     gap +
                     (act_horizon - 1) * act_stride + 1)
 
-                for i in range(max_index):
+                for i in range(self.skip, max_index):
                     self.index_map.append((run_key, i))
                 
         if self.cache_size:
@@ -164,52 +166,49 @@ class SampleData(Dataset):
             data = run[self.diff+key]
             idxs = [pred_start + i * self.act_stride for i in range(self.act_horizon)]
             if key == 'location':
-                yaw = self._estimate_yaw(data[start_idx+10, :2], data[start_idx ,:2])
-                act_tensors.append(torch.tensor(self._global_to_ego_2d(np.array(data[idxs]), np.array(data[start_idx]), (yaw + np.pi) % (2 * np.pi)), dtype=torch.float32).squeeze())
+                yaw = self._estimate_yaw(run[self.diff+'velocity'][start_idx])
+                act_tensors.append(torch.tensor(self._global_to_ego_2d(np.array(data[idxs]), np.array(data[start_idx]), yaw), dtype=torch.float32).squeeze())
             else:
                 act_tensors.append(torch.tensor(data[idxs], dtype=torch.float32).squeeze())
 
         return obs_tensors, act_tensors
     
-    def _estimate_yaw(self, ego_pos_now, ego_pos_prev):
-        dx = ego_pos_now[0] - ego_pos_prev[0]
-        dy = ego_pos_now[1] - ego_pos_prev[1]
+    def _estimate_yaw(self, ego_vel):
+        dx = ego_vel[0]
+        dy = ego_vel[1]
         return np.arctan2(dy, dx)
     
-    def _global_to_ego_2d(self, global_points, ego_position, ego_yaw_deg):
+    def _global_to_ego_2d(self, global_points, ego_position, ego_yaw_rad):
         """
-        Convert 3D global coordinates to 2D ego-centric waypoints.
-        Ignores the z-coordinate.
+        Convert global 2D/3D points to ego-centric coordinates.
+        Ego frame: +x = forward, +y = right, -y = left.
+        Ensures that points in front always have x > 0, regardless of global direction.
 
         Args:
-            global_points: Nx3 numpy array (x, y, z)
-            ego_position: (x0, y0, z0)
-            ego_yaw_deg: yaw angle in degrees (as in CARLA)
+            global_points: (N, 3) or (N, 2)
+            ego_position: (3,) or (2,) — vehicle position in global coordinates
+            ego_yaw_rad: float — heading in radians
 
         Returns:
-            Nx2 numpy array of (x_rel, y_rel) in ego frame
+            (N, 2) — ego-frame (x, y): x > 0 = ahead, y > 0 = right
         """
-        # Use only x and y
         global_xy = global_points[:, :2]
         ego_xy = np.array(ego_position[:2])
 
-        # Convert yaw to radians
-        yaw = np.deg2rad(ego_yaw_deg)
-
-        # Translate
+        # Translate: center the frame at ego
         delta = global_xy - ego_xy
 
-        # Rotation: global to ego (inverse rotation)
-        cos_yaw = np.cos(yaw)
-        sin_yaw = np.sin(yaw)
-        rotation_matrix = np.array([
-            [cos_yaw, sin_yaw],
-            [-sin_yaw, cos_yaw]
+        # Rotation: global → ego with Y flipped (so +Y is right)
+        cos_yaw = np.cos(ego_yaw_rad)
+        sin_yaw = np.sin(ego_yaw_rad)
+
+        rotation_matrix = np.array([ 
+            [ cos_yaw,  sin_yaw],
+            [ sin_yaw, -cos_yaw],
         ])
 
-        # Rotate
-        ego_waypoints = delta @ rotation_matrix.T
-        return ego_waypoints
+        return np.matmul(delta, rotation_matrix.T)  # shape: (N, 2)
+
 
     def __del__(self):
         if self.file:

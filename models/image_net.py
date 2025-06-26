@@ -11,8 +11,8 @@ Output:
 - (Optional) `location_preds`: Tensor of shape `[B, COMMANDS, STEPS, 2]` — all branch predictions
 """
 
-from .resnet_utils import ResnetBase, NormalizeV2, SpatialSoftmax, select_branch
-import torchvision.transforms.functional as tgm
+from .network_utils import ResnetBase, NormalizeV2, SpatialSoftmaxV2, select_branch
+import torchvision.transforms.functional as tf
 import torch
 import torch.nn as nn
 
@@ -34,7 +34,7 @@ class ImagePolicyModel(ResnetBase):
         location_pred (nn.ModuleList): List of command-specific location predictors
     """
 
-    def __init__(self, backbone, pretrained=False, all_branch=False, steps=5, commands=5, **kwargs):
+    def __init__(self, backbone, pretrained=False, steps=5, commands=5, **kwargs):
         super().__init__(backbone, pretrained=pretrained, input_channel=3, bias_first=False)
 
         self.c = {
@@ -66,11 +66,10 @@ class ImagePolicyModel(ResnetBase):
             nn.Sequential(
                 nn.BatchNorm2d(64),
                 nn.Conv2d(64, steps, 1, 1, 0),
-                SpatialSoftmax(48, 48, steps),
+                SpatialSoftmaxV2(48, 48, steps),
             ) for _ in range(commands)
         ])
 
-        self.all_branch = all_branch
 
     def forward(self, image, velocity, command):
         """
@@ -86,7 +85,7 @@ class ImagePolicyModel(ResnetBase):
             location_preds (Tensor, optional): [B, COMMANDS, STEPS, 2] — all command predictions (if all_branch=True)
         """
 
-        image = tgm.resize(image, (192, 192))
+        image = tf.resize(image, (192, 192))
         image = self.rgb_transform(image)           # Normalize input
         h = self.conv(image)                        # Extract features from ResNet
         b, c, kh, kw = h.size()
@@ -94,16 +93,12 @@ class ImagePolicyModel(ResnetBase):
         if velocity.dim() == 1:
             velocity = velocity[:, None]
         velocity = velocity[..., None, None].repeat(1, 128, kh, kw)           # [B, 128, H, W]
+        
         h = torch.cat((h, velocity), dim=1)                                   # Late fusion with image features
-
         h = self.deconv(h)     
 
         location_preds = [branch(h) for branch in self.location_pred]         # List of [B, STEPS, 2]
         location_preds = torch.stack(location_preds, dim=1)                   # [B, COMMANDS, STEPS, 2]
-
         location_pred = select_branch(location_preds, command)                # [B, STEPS, 2]
-
-        if self.all_branch:
-            return location_pred, location_preds
 
         return location_pred

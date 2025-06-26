@@ -13,13 +13,13 @@ def count_run_with_collisions(file):
     return count
 
 # === CONFIGURATION ===
-file_path = 'D:\\marathon.hdf5'
+file_path = 'data/run.hdf5'
 with h5py.File(file_path, 'r') as f:
     print(f"No. of runs: {len(f['runs'])}")
     print(f"Runs with collisions: {count_run_with_collisions(f)}")
 num = input('Enter run no. ')
 demo_key = f'{num}'
-scale_factor = 3
+scale_factor = 2
 image_padding = 20
 lidar_scale = 2  # Scaling for LiDAR visualization
 

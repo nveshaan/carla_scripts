@@ -25,12 +25,6 @@ def select_branch(branches: torch.Tensor, command: torch.Tensor) -> torch.Tensor
     return branches[torch.arange(branches.size(0)), command]
 
 
-class PixelToWorld(nn.Module):
-    def __init__(self, steps):
-        super().__init__()
-
-
-
 class ResnetBase(nn.Module):
     def __init__(self, backbone, input_channel=3, bias_first=True, pretrained=False):
         super().__init__()
@@ -128,28 +122,68 @@ class SpatialSoftmax(nn.Module):
         return expected_xy.view(N, C, 2)
 
 
-class SpatialSoftmaxBZ(nn.Module):
-    def __init__(self, height: int, width: int):
+class SpatialSoftmaxV2(nn.Module):
+    """
+    Computes expected 2D positions from a feature map using softmax attention.
+    Converts output to real-world coordinates based on physical ranges.
+
+    Coordinate convention (ego-frame):
+        - +x is forward
+        - -y is left
+        - +y is right
+
+    Args:
+        height (int): height of feature map
+        width (int): width of feature map
+        channel (int): number of channels
+        temperature (float): temperature for softmax sharpness
+        data_format (str): 'NCHW' or 'NHWC'
+        x_range (tuple): (min_x, max_x) physical range in meters, e.g. (0, 5)
+        y_range (tuple): (min_y, max_y) physical range in meters, e.g. (-2, 2)
+
+    Output:
+        Tensor of shape (N, C, 2), where each (x, y) is in meters
+    """
+    def __init__(self, height: int, width: int, channel: int,
+                 temperature: float = None, data_format: str = 'NCHW',
+                 x_range=(0, 20), y_range=(-1, 1)):
         super().__init__()
+        self.data_format = data_format
         self.height = height
         self.width = width
+        self.channel = channel
+        self.x_range = x_range
+        self.y_range = y_range
+
+        self.temperature = nn.Parameter(torch.ones(1) * temperature) if temperature else 1.0
 
         pos_x, pos_y = np.meshgrid(
-            np.linspace(-1.0, 1.0, self.height),
-            np.linspace(-1.0, 1.0, self.width)
+            np.linspace(-1., 1., height),
+            np.linspace(-1., 1., width)
         )
-        self.pos_x = nn.Parameter(torch.from_numpy(pos_x.reshape(-1)).float(), requires_grad=False)
-        self.pos_y = nn.Parameter(torch.from_numpy(pos_y.reshape(-1)).float(), requires_grad=False)
+        self.register_buffer('pos_x', torch.from_numpy(pos_x.reshape(-1)).float())  # [H*W]
+        self.register_buffer('pos_y', torch.from_numpy(pos_y.reshape(-1)).float())  # [H*W]
 
     def forward(self, feature: torch.Tensor) -> torch.Tensor:
+        if self.data_format == 'NHWC':
+            feature = feature.permute(0, 3, 1, 2)  # to NCHW
         N, C, H, W = feature.shape
-        flattened = feature.view(N, C, -1)
-        softmax = F.softmax(flattened, dim=-1)
+        assert H == self.height and W == self.width, "Input size doesn't match initialized height/width"
 
-        expected_x = torch.sum(self.pos_y * softmax, dim=-1)
-        expected_x = (-expected_x + 1) / 2.0  # flip y-axis to [0, 1]
+        feature = feature.view(N * C, H * W)  # [N*C, H*W]
 
-        expected_y = torch.sum(self.pos_x * softmax, dim=-1)
-        expected_xy = torch.stack([expected_x, expected_y], dim=2)
+        weight = F.softmax(feature / self.temperature, dim=-1)  # [N*C, H*W]
 
-        return expected_xy
+        # Expected (x, y) in [-1, 1]
+        expected_x = torch.sum(self.pos_x * weight, dim=1, keepdim=True)
+        expected_y = torch.sum(self.pos_y * weight, dim=1, keepdim=True)
+
+        # Scale from [-1, 1] → real-world units
+        x_min, x_max = self.x_range
+        y_min, y_max = self.y_range
+
+        x_m = ((expected_x + 1) / 2) * (x_max - x_min) + x_min
+        y_m = ((expected_y + 1) / 2) * (y_max - y_min) + y_min
+
+        expected_xy = torch.cat([x_m, y_m], dim=1)  # [N*C, 2]
+        return expected_xy.view(N, C, 2)

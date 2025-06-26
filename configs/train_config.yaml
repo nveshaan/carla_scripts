@@ -5,7 +5,7 @@ defaults:
 
 seed: 42
 data:
-  file_path: "data/sprint.hdf5"
+  file_path: "data/run.hdf5"
   obs_keys: ["image", "velocity", "command"]
   act_keys: ["location"]
   obs_horizon: 1
@@ -14,7 +14,7 @@ data:
   obs_stride: 1
   act_stride: 5
   val_ratio: 0.2
-  batch_size: 64
+  batch_size: 32
   num_workers: 2
 
 model:
