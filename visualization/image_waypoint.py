@@ -32,7 +32,7 @@ num = input('Enter run no. ')
 demo_key = f'{num}'
 scale_factor = 2
 image_padding = 20
-lidar_scale = 2  # Scaling for LiDAR visualization
+lidar_scale = 5  # Scaling for LiDAR visualization
 
 # === LOAD HDF5 IMAGES AND METADATA ===
 with h5py.File(file_path, 'r') as f:
@@ -100,7 +100,7 @@ for frame_lidar in lasers:
     # Set pixels: grayscale (R=G=B=intensity)
     surface_array[py, px] = np.stack([intensities]*3, axis=1)
 
-    # Draw ego vehicle (red circle)
+    # Draw ego vehicle
     ego_px = scaled_width // 2
     ego_py = scaled_height // 2
     radius = 5
@@ -110,7 +110,7 @@ for frame_lidar in lasers:
                 cx = ego_px + dx
                 cy = ego_py + dy
                 if 0 <= cx < scaled_width and 0 <= cy < scaled_height:
-                    surface_array[cy, cx] = [255, 0, 0]
+                    surface_array[cy, cx] = [0, 0, 255]
 
     # Convert numpy array to pygame Surface
     lidar_surface = pygame.surfarray.make_surface(surface_array.swapaxes(0, 1))  # Pygame uses (width, height)
@@ -126,7 +126,7 @@ def ego_to_camera(points):
     cam = np.stack([y, -z, x], axis=1)
 
     # Apply pitch (-10° down)
-    pitch = np.radians(-10.0)
+    pitch = np.radians(10.0)
     Rx = np.array([
         [1, 0, 0],
         [0, np.cos(pitch), -np.sin(pitch)],
@@ -135,7 +135,7 @@ def ego_to_camera(points):
     cam = (Rx @ cam.T).T
 
     # Camera is 2m forward (x), 2m above (z) → offset in camera frame: Z−2, Y−2
-    cam += np.array([0.0, -2.0, -2.0])
+    cam += np.array([0.0, 2.0, 2.0])
 
     return cam
 
@@ -184,6 +184,18 @@ def draw_lidar_surface(lidar, actual, predicted):
                 canvas[py-2:py+2, px-2:px+2] = color
     mark(actual, [0, 255, 0])
     mark(predicted, [255, 0, 0])
+
+    ego_px = scaled_width // 2
+    ego_py = scaled_height // 2
+    radius = 5
+    for dy in range(-radius, radius + 1):
+        for dx in range(-radius, radius + 1):
+            if dx * dx + dy * dy <= radius * radius:
+                cx = ego_px + dx
+                cy = ego_py + dy
+                if 0 <= cx < scaled_width and 0 <= cy < scaled_height:
+                    canvas[cy, cx] = [0, 0, 255]
+    
     return pygame.surfarray.make_surface(canvas.swapaxes(0, 1))
 
 def draw_waypoints(surface, waypoints, color):
