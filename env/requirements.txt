@@ -30,6 +30,7 @@ psutil==7.0.0
 pycparser @ file:///tmp/build/80754af9/pycparser_1636541352034/work
 pydantic==2.11.7
 pydantic_core==2.33.2
+pygame==2.6.1
 PySocks @ file:///home/builder/ci_310/pysocks_1640793678128/work
 PyYAML @ file:///croot/pyyaml_1728657952215/work
 requests @ file:///croot/requests_1750426329888/work

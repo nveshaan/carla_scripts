@@ -13,26 +13,27 @@ from models.image_net import ImagePolicyModel
 from dataloader.dataset import SampleData
 
 # === MODEL INITIALIZATION ===
+file_path = "/mnt/sdb/offroad_navigation/marathon.hdf5"
+
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 loss_fn = torch.nn.MSELoss()
 
-dataset = SampleData("data/run.hdf5", 1, 5, 5, 1, 5, ["image", "velocity", "command"], ["location"])
+dataset = SampleData(file_path, 1, 5, 5, 1, 5, ["image", "velocity", "command"], ["location"])
 dataloader = DataLoader(dataset, 1, shuffle=False)
 
 model = ImagePolicyModel(backbone="resnet34")
-model.load_state_dict(torch.load("checkpoints/0627_1556_model.pth", map_location=device, weights_only=True), strict=False)
+model.load_state_dict(torch.load("checkpoints/0627_0936_model.pth", map_location=device, weights_only=True), strict=False)
 model.to(device)
 model.eval()
 
 # === CONFIGURATION ===
-file_path = 'data/run.hdf5'
 with h5py.File(file_path, 'r') as f:
     print(f"No. of runs: {len(f['runs'])}")
 num = input('Enter run no. ')
 demo_key = f'{num}'
 scale_factor = 2
 image_padding = 20
-lidar_scale = 5  # Scaling for LiDAR visualization
+lidar_scale = 7  # Scaling for LiDAR visualization
 
 # === LOAD HDF5 IMAGES AND METADATA ===
 with h5py.File(file_path, 'r') as f:
@@ -44,12 +45,12 @@ with h5py.File(file_path, 'r') as f:
     controls = group['control'][:]
     commands = group['command'][:]
 
-num_frames = len(dataloader)
+num_frames = len(dataset) // 1002
 height, width = images.shape[1:3]
 scaled_width = width * scale_factor
 scaled_height = height * scale_factor
 
-data_frames = list(islice(dataloader, num_frames))
+data_frames = list(islice(dataloader, int(num_frames*(int(num)-1)), int(num_frames*int(num))))
 
 # === PYGAME SETUP ===
 pygame.init()
@@ -253,11 +254,11 @@ while running:
     if playing:
         frame_index = (frame_index + 1) % num_frames
 
-    frame = images[frame_index][..., ::-1]  # BGR to RGB
+    frame = images[int(frame_index)][..., ::-1]  # BGR to RGB
     surface = pygame.surfarray.make_surface(frame.swapaxes(0, 1))
     surface = pygame.transform.scale(surface, (scaled_width, scaled_height))
 
-    obs, act = data_frames[frame_index]
+    obs, act = data_frames[int(frame_index)]
     image_tensor, vel_tensor, cmd_tensor = [x.to(device) for x in obs]
     target = act[0].to(device)
     with torch.inference_mode():
@@ -269,7 +270,7 @@ while running:
     draw_waypoints(surface, target_np, (0, 255, 0))
     draw_waypoints(surface, pred_np, (255, 0, 0))
 
-    lidar_surface = draw_lidar_surface(lasers[frame_index], target_np, pred_np)
+    lidar_surface = draw_lidar_surface(lasers[int(frame_index)], target_np, pred_np)
 
     screen.fill((255, 255, 255))
     screen.blit(surface, (0, 0))
