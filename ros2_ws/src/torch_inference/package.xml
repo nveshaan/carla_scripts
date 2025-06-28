@@ -3,9 +3,16 @@
 <package format="3">
   <name>torch_inference</name>
   <version>0.0.0</version>
-  <description>TODO: Package description</description>
-  <maintainer email="nveshaan@todo.todo">nveshaan</maintainer>
+  <description>Inference Node for PyTorch Model</description>
+  <maintainer email="nveshaan@gmail.com">nveshaan</maintainer>
   <license>Apache-2.0</license>
+
+  <exec_depend>rclpy</exec_depend>
+  <exec_depend>std_msgs</exec_depend>
+  <exec_depend>sensor_msgs</exec_depend>
+  <exec_depend>cv_bridge</exec_depend>
+  <exec_depend>python3-numpy</exec_depend>
+  <exec_depend>python3</exec_depend>
 
   <test_depend>ament_copyright</test_depend>
   <test_depend>ament_flake8</test_depend>
