@@ -14,6 +14,6 @@ build/
 install/
 log/
 
-# .local_setup.sh (not tracked in git)
-ln -sfn ./offroad_navigation/models ros2_ws/src/torch_inference/torch_inference/models
-ln -sfn ./offroad_navigation/checkpoints ros2_ws/src/torch_inference/torch_inference/checkpoints
+ros2_ws/src/torch_inference/torch_inference/models/
+ros2_ws/src/torch_inference/torch_inference/checkpoints/
+
