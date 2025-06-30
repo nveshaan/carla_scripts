@@ -1,20 +1,35 @@
+# Log and data files
 *.log
 *.hdf5
+
+# Python cache
 __pycache__/
+*.pyc
+
+# Model checkpoints
 checkpoints/
 *pth
-*.pyc
+
+# Weights & Biases logs
 wandb/
+
+# Output directories
 outputs/
+
+# Conda environment (except requirements and environment files)
 env/*
 !env/requirements.txt
 !env/environment.yml
 !env/environment.yaml
+
+# ROS 2 build artifacts
 build/
 install/
 log/
 
+# Symlinked or copied model/checkpoint folders in ROS2 package
 ros2_ws/src/torch_inference/torch_inference/models/
 ros2_ws/src/torch_inference/torch_inference/checkpoints/
 
+# VS Code settings
 .vscode/
