@@ -1,6 +1,6 @@
 # Offroad Navigation
 
-```py 
+```bash
 offroad_navigation
 ├── carla
 │   ├── agent_testing/
@@ -47,7 +47,7 @@ offroad_navigation
     └── image_waypoint.py
 ```
 
-# Setup
+## Setup
 The code for data collection has been written to run on **Windows 10**, with **Carla 0.10.0** and **Python 3.9**. Although, with minor changes, it can be run on **Ubuntu** as well. An Nvidia GPU is a must.
 
 PyTorch scripts are meant to be run on **Ubuntu 22.04** with **CUDA 12.1**. The Conda environment is stored in `env/environment.yml`. Run the below commands to setup the Python environment.
@@ -64,10 +64,12 @@ Other software to be used is listed below:
 
 
 
-dev: sync folders
+<!-- dev: sync folders
+
+copy the folders first
 
 # Create symlink to shared models directory
 ln -s /mnt/d/offroad_navigation/models /mnt/d/offroad_navigation/ros2_ws/src/torch_inference/torch_inference/models
 
 # Do the same for checkpoints
-ln -s /mnt/d/offroad_navigation/checkpoints /mnt/d/offroad_navigation/ros2_ws/src/torch_inference/torch_inference/checkpoints
+ln -s /mnt/d/offroad_navigation/checkpoints /mnt/d/offroad_navigation/ros2_ws/src/torch_inference/torch_inference/checkpoints -->

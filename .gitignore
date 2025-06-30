@@ -17,3 +17,4 @@ log/
 ros2_ws/src/torch_inference/torch_inference/models/
 ros2_ws/src/torch_inference/torch_inference/checkpoints/
 
+.vscode/

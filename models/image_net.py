@@ -75,12 +75,12 @@ class ImagePolicyModel(ResnetBase):
         Forward pass of the ImagePolicyModel.
 
         Args:
-            image (Tensor): [B, 3, H, W] — input RGB images
-            velocity (Tensor): [B] — scalar speed values
-            command (Tensor): [B] — integer command index (0 to 6)
+            image (Tensor): (B, 3, H, W) — input RGB images
+            velocity (Tensor): (B) — scalar speed values
+            command (Tensor): (B) — integer command index (0 to 6)
 
         Returns:
-            location_pred (Tensor): [B, STEPS, 2] — (x, y) waypoints for the selected command
+            location_pred (Tensor): (B, STEPS, 2) — [x, y] waypoints for the selected command
         """
 
         image = tf.resize(image, (192, 192))
