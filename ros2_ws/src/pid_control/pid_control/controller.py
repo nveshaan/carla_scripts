@@ -91,7 +91,7 @@ class WaypointPIDController(Node):
         self.fps = 20
         self.dt = 1.0 / self.fps
         self.gap = 5
-        self.command = 3
+        self.command = 4  # Default command
 
         self.steer_points = {"1": 4, "2": 3, "3": 2, "4": 2}
         self.pid_gains = {
@@ -109,7 +109,7 @@ class WaypointPIDController(Node):
 
         self.create_subscription(Float32MultiArray, '/prediction/waypoints', self.waypoint_callback, 10)
         self.create_subscription(CarlaEgoVehicleStatus, '/carla/ego/vehicle_status', self.status_callback, 10)
-        self.create_subscription(Int32, '/route_command', self.command_callback, 10)
+        self.create_subscription(Int32, '/carla/ego/high_level_command', self.command_callback, 10)
 
         self.control_pub = self.create_publisher(CarlaEgoVehicleControl, '/carla/ego/vehicle_control_cmd', 10)
         self.timer = self.create_timer(self.dt, self.control_loop)

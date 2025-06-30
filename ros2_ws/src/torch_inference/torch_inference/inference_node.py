@@ -1,11 +1,12 @@
 import torch
 import torchvision.transforms as T
+from ros2_ws.build.carla_msgs.ament_cmake_python.carla_msgs.carla_msgs import msg
 from torch_inference.models.image_net import ImagePolicyModel
 
 import rclpy
 from rclpy.node import Node
 from sensor_msgs.msg import Image
-from std_msgs.msg import Float32MultiArray, Float32
+from std_msgs.msg import Float32MultiArray, Int32
 from carla_msgs.msg import CarlaEgoVehicleStatus
 
 from cv_bridge import CvBridge, CvBridgeError
@@ -39,8 +40,8 @@ class WaypointPredictionNode(Node):
 
         if self.env == "sim":
             self.img_sub = self.create_subscription(Image, '/carla/ego/camera/image', self.img_callback, 10)
-            self.vel_sub = self.create_subscription(CarlaEgoVehicleStatus, 'carla/ego/vehicle_status', self.vel_callback, 10)
-            self.cmd_sub = self.create_subscription(Float32, 'carla/ego/high_command', self.cmd_callback, 10)
+            self.vel_sub = self.create_subscription(CarlaEgoVehicleStatus, '/carla/ego/vehicle_status', self.vel_callback, 10)
+            self.cmd_sub = self.create_subscription(Int32, '/carla/ego/high_level_command', self.cmd_callback, 10)
         else:
             pass # TODO: check the real topic names
 
@@ -54,8 +55,8 @@ class WaypointPredictionNode(Node):
     def img_callback(self, img):
         self.latest_img = img
 
-    def vel_callback(self, vel):
-        self.latest_vel = vel
+    def vel_callback(self, stat):
+        self.latest_vel = stat.velocity
 
     def cmd_callback(self, cmd):
         self.latest_cmd = cmd
@@ -86,7 +87,9 @@ class WaypointPredictionNode(Node):
             return
 
         try:
-            self.publisher_.publish(waypoints)
+            msg = Float32MultiArray()
+            msg.data = waypoints.flatten().tolist()
+            self.publisher_.publish(msg)
         except CvBridgeError as e:
             self.get_logger().error('Failed to publish waypoints: %s' % str(e))
 
