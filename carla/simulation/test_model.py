@@ -94,7 +94,7 @@ def main():
     print("Launching CARLA...")
     time.sleep(10)
 
-    client = carla.Client('localhost', 2000)
+    client = carla.Client('172.28.129.33', 2000)
     client.set_timeout(10.0)
     world = client.load_world(MAP)
     blueprint_library = world.get_blueprint_library()
