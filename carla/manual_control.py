@@ -1331,7 +1331,7 @@ def main():
         '-v', '--verbose', action='store_true', dest='debug',
         help='print debug information')
     argparser.add_argument(
-        '--host', metavar='H', default='172.28.129.33',
+        '--host', metavar='H', default='127.0.0.1',
         help='IP of the host server (default: 127.0.0.1)')
     argparser.add_argument(
         '-p', '--port', metavar='P', default=2000, type=int,

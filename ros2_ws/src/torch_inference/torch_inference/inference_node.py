@@ -1,6 +1,7 @@
+#!/usr/bin/env python3
+ 
 import torch
 import torchvision.transforms as T
-from ros2_ws.build.carla_msgs.ament_cmake_python.carla_msgs.carla_msgs import msg
 from torch_inference.models.image_net import ImagePolicyModel
 
 import rclpy
@@ -26,7 +27,7 @@ class WaypointPredictionNode(Node):
         self.wait = self.get_parameter("wait").get_parameter_value().double_value
 
         script_dir = os.path.dirname(os.path.realpath(__file__))
-        model_path = os.path.join(script_dir, "checkpoints", "0627_1556_model.pth")
+        model_path = os.path.join(script_dir, "checkpoints", "0627_0936_model.pth")
 
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 

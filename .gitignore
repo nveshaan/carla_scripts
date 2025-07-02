@@ -18,9 +18,7 @@ outputs/
 
 # Conda environment (except requirements and environment files)
 env/*
-!env/requirements.txt
-!env/environment.yml
-!env/environment.yaml
+!env/train_env.yml
 
 # ROS 2 build artifacts
 build/

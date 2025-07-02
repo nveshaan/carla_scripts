@@ -1,19 +1,15 @@
 ARG IMG=ros
 FROM $IMG
 
-ARG ARCH=amd64
-# Clean old ROS keys and sources and add new ones (only if ARCH=arm64)
-RUN if [ "$ARCH" = "arm64" ]; then \
-      find /etc/apt/sources.list.d/ -name '*ros*' -exec rm -f {} \; && \
-      rm -f /etc/apt/trusted.gpg.d/ros* && \
-      apt-key del F42ED6FBAB17C654 || true && \
-      apt-get update && apt-get install -y curl gnupg2 lsb-release && \
-      mkdir -p /etc/apt/keyrings && \
-      curl -fsSL https://raw.githubusercontent.com/ros/rosdistro/master/ros.key \
-      | gpg --dearmor -o /etc/apt/keyrings/ros-archive-keyring.gpg && \
-      echo "deb [arch=arm64 signed-by=/etc/apt/keyrings/ros-archive-keyring.gpg] http://packages.ros.org/ros2/ubuntu $(lsb_release -cs) main" \
-      > /etc/apt/sources.list.d/ros2.list; \
-    fi
+RUN find /etc/apt/sources.list.d/ -name '*ros*' -exec rm -f {} \; && \
+    rm -f /etc/apt/trusted.gpg.d/ros* && \
+    apt-key del F42ED6FBAB17C654 || true && \
+    apt-get update && apt-get install -y curl gnupg2 lsb-release && \
+    mkdir -p /etc/apt/keyrings && \
+    curl -fsSL https://raw.githubusercontent.com/ros/rosdistro/master/ros.key \
+    | gpg --dearmor -o /etc/apt/keyrings/ros-archive-keyring.gpg && \
+    echo "deb [arch=arm64 signed-by=/etc/apt/keyrings/ros-archive-keyring.gpg] http://packages.ros.org/ros2/ubuntu $(lsb_release -cs) main" \
+    > /etc/apt/sources.list.d/ros2.list;
 
 # install necessary tools
 RUN apt-get update \

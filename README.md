@@ -48,13 +48,12 @@ offroad_navigation
 ```
 
 ## Setup
-The code for data collection has been written to run on **Windows 10**, with **Carla 0.10.0** and **Python 3.9**. Although, with minor changes, it can be run on **Ubuntu** as well. An Nvidia GPU is a must.
+The code for data collection has been written to run on **Windows 10**, with **Carla 0.10.0** and **Python 3.9**. Although, with minor changes, it can be run on **Ubuntu** as well.
 
 PyTorch scripts are meant to be run on **Ubuntu 22.04** with **CUDA 12.1**. The Conda environment is stored in `env/environment.yml`. Run the below commands to setup the Python environment.
 ```bash
-conda env create -f ./env/environment.yml -p ./env
-conda activate ./env
-pip3 install ./env/requirements.txt
+conda env create -f ./env/train_env.yml -p ./env/train
+conda activate ./env/train
 ```
 This Python environment can be used for the rest of the workflow.
 
