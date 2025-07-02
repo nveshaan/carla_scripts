@@ -3,6 +3,8 @@ import subprocess
 import time
 import psutil
 import random
+import threading
+import keyboard  # pip install keyboard
 
 import rclpy
 from rclpy.node import Node
@@ -56,15 +58,20 @@ def get_closest_command(ego_location, route, lookahead=5.0):
     return COMMAND_MAP.get(closest_command, -1)
 
 
-# === ROS Node ===
+# === ROS Nodes ===
 class RoutePublisherNode(Node):
     def __init__(self, vehicle, route):
         super().__init__('route_publisher')
         self.vehicle = vehicle
         self.route = route
+        self.cmd = -1
 
-        self.cmd_pub = self.create_publisher(Int32, '/ego/high_level_command', 10)
         self.status_pub = self.create_publisher(CarlaEgoVehicleStatus, '/carla/ego_vehicle/vehicle_status', 10)
+        self.cmd_pub = self.create_publisher(Int32, '/ego/high_level_command', 10)
+        self.enable_autonomy = bool(route and len(route) > 0)
+
+        if not self.enable_autonomy:
+            self.get_logger().warn("Route not available. Disabling command publishing from planner.")
 
         self.timer = self.create_timer(0.05, self.timer_callback)  # 20 Hz
 
@@ -76,16 +83,48 @@ class RoutePublisherNode(Node):
         loc = self.vehicle.get_location()
         velocity = self.vehicle.get_velocity()
 
-        # Publish high-level command
-        command_int = get_closest_command(loc, self.route)
-        cmd_msg = Int32()
-        cmd_msg.data = command_int
-        self.cmd_pub.publish(cmd_msg)
+        # Publish high-level command only if route is valid
+        if self.enable_autonomy:
+            command_int = get_closest_command(loc, self.route)
+            if self.cmd != command_int:
+                self.cmd = command_int
+                self.get_logger().info(f"Publishing command: {command_int}")
+                cmd_msg = Int32()
+                cmd_msg.data = command_int
+                self.cmd_pub.publish(cmd_msg)
 
-        # Publish vehicle status (dummy or basic velocity only)
+        # Publish velocity
         status = CarlaEgoVehicleStatus()
         status.velocity = (velocity.x**2 + velocity.y**2 + velocity.z**2)**0.5
         self.status_pub.publish(status)
+
+
+class KeyboardCommandNode(Node):
+    def __init__(self):
+        super().__init__('keyboard_command_node')
+        self.cmd_pub = self.create_publisher(Int32, '/ego/high_level_command', 10)
+        self.running = True
+        threading.Thread(target=self.keyboard_listener, daemon=True).start()
+
+    def keyboard_listener(self):
+        self.get_logger().info("Keyboard listener started. Press:")
+        self.get_logger().info("  1 = LEFT, 2 = RIGHT, 3 = STRAIGHT, 4 = LANEFOLLOW")
+        while self.running:
+            if keyboard.is_pressed('1'):
+                self.publish_cmd(RoadOption.LEFT)
+            elif keyboard.is_pressed('2'):
+                self.publish_cmd(RoadOption.RIGHT)
+            elif keyboard.is_pressed('3'):
+                self.publish_cmd(RoadOption.STRAIGHT)
+            elif keyboard.is_pressed('4'):
+                self.publish_cmd(RoadOption.LANEFOLLOW)
+            time.sleep(0.1)
+
+    def publish_cmd(self, road_option):
+        msg = Int32()
+        msg.data = COMMAND_MAP[road_option]
+        self.cmd_pub.publish(msg)
+        self.get_logger().info(f"Published manual command: {msg.data}")
 
 
 # === Main Entry ===
@@ -107,7 +146,7 @@ def main():
     # Spawn ego vehicle
     spawn_point, end_point = random.choices(world.get_map().get_spawn_points(), k=2)
     vehicle_bp = blueprint_library.find(VEHICLE_TYPE)
-    vehicle_bp.set_attribute("role_name", "ego")  # ROS 2 bridge uses this
+    vehicle_bp.set_attribute("role_name", "ego")
     ego_vehicle = world.try_spawn_actor(vehicle_bp, spawn_point)
     if not ego_vehicle:
         raise RuntimeError("Failed to spawn ego vehicle.")
@@ -123,27 +162,32 @@ def main():
     camera = world.spawn_actor(sensor_bp, camera_transform, attach_to=ego_vehicle)
     camera.enable_for_ros()
 
-    # Plan route
+    # Try planning route
     start_wp = world.get_map().get_waypoint(ego_vehicle.get_location())
     end_wp = world.get_map().get_waypoint(end_point.location)
     route = grp.trace_route(start_wp.transform.location, end_wp.transform.location)
 
-    if not route:
-        raise RuntimeError("Route planning failed.")
-
-    print("Route planned, starting ROS 2 node...")
-
-    # Run ROS 2
     rclpy.init()
-    node = RoutePublisherNode(ego_vehicle, route)
-    rclpy.spin(node)
 
-    # Cleanup
-    node.destroy_node()
-    rclpy.shutdown()
-    camera.destroy()
-    ego_vehicle.destroy()
-    carla_proc.terminate()
+    try:
+        route_node = RoutePublisherNode(ego_vehicle, route)
+        if not route_node.enable_autonomy:
+            keyboard_node = KeyboardCommandNode()
+            executor = rclpy.executors.MultiThreadedExecutor()
+            executor.add_node(route_node)
+            executor.add_node(keyboard_node)
+            executor.spin()
+            keyboard_node.destroy_node()
+        else:
+            rclpy.spin(route_node)
+
+        route_node.destroy_node()
+
+    finally:
+        rclpy.shutdown()
+        camera.destroy()
+        ego_vehicle.destroy()
+        carla_proc.terminate()
 
 
 if __name__ == '__main__':
