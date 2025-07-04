@@ -23,7 +23,7 @@ class WaypointPredictionNode(Node):
     def __init__(self):
         super().__init__("inference_node")
         self.declare_parameter("env", "sim")
-        self.declare_parameter("wait", 20.0)
+        self.declare_parameter("wait", 0.5)
         self.env = self.get_parameter("env").get_parameter_value().string_value
         self.wait = self.get_parameter("wait").get_parameter_value().double_value
 

@@ -11,6 +11,7 @@ from rclpy.node import Node
 
 from std_msgs.msg import Int32
 from carla_msgs.msg import CarlaEgoVehicleStatus
+from carla_msgs.msg import CarlaEgoVehicleControl
 
 from navigation.local_planner import RoadOption
 from navigation.global_route_planner import GlobalRoutePlanner
@@ -59,7 +60,7 @@ def get_closest_command(ego_location, route, lookahead=5.0):
 
 
 # === ROS Nodes ===
-class RoutePublisherNode(Node):
+class CarlaNode(Node):
     def __init__(self, vehicle):
         super().__init__('velocity_publisher')
         self.vehicle = vehicle
@@ -73,9 +74,11 @@ class RoutePublisherNode(Node):
         if not self.enable_autonomy:
             self.get_logger().warn("Route not available. Disabling command publishing from planner.")
 
-        self.timer = self.create_timer(0.05, self.timer_callback)  # 20 Hz
+        self.timer = self.create_timer(0.05, self.update_callback)  # 20 Hz
 
-    def timer_callback(self):
+        self.control_sub = self.create_subscription(CarlaEgoVehicleControl, '/carla/ego/vehicle_control_cmd', self.control_callback, 10)
+
+    def update_callback(self):
         if not self.vehicle.is_alive:
             self.get_logger().warn("Ego vehicle no longer exists.")
             return
@@ -97,6 +100,17 @@ class RoutePublisherNode(Node):
         status = CarlaEgoVehicleStatus()
         status.velocity = (velocity.x**2 + velocity.y**2 + velocity.z**2)**0.5
         self.status_pub.publish(status)
+
+    def control_callback(self, msg: CarlaEgoVehicleControl):
+        control = carla.VehicleControl()
+        control.throttle = msg.throttle
+        control.steer = msg.steer
+        control.brake = msg.brake
+        control.hand_brake = msg.hand_brake
+        control.reverse = msg.reverse
+        control.manual_gear_shift = msg.manual_gear_shift
+        control.gear = msg.gear
+        self.vehicle.apply_control(control)
 
 
 class KeyboardCommandNode(Node):
@@ -171,7 +185,7 @@ def main():
     rclpy.init()
 
     try:
-        route_node = RoutePublisherNode(ego_vehicle)
+        carla_node = CarlaNode(ego_vehicle)
       #  if not route_node.enable_autonomy:
       #      keyboard_node = KeyboardCommandNode()
       #      executor = rclpy.executors.MultiThreadedExecutor()
@@ -180,9 +194,9 @@ def main():
       #      executor.spin()
       #      keyboard_node.destroy_node()
       #  else:
-        rclpy.spin(route_node)
+        rclpy.spin(carla_node)
 
-        route_node.destroy_node()
+        carla_node.destroy_node()
 
     finally:
         rclpy.shutdown()

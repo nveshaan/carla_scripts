@@ -103,7 +103,7 @@ class WaypointPIDController(Node):
         }
 
         self.turn_control = CustomController(self.pid_gains, dt=self.dt)
-        self.speed_control = PIDController(K_P=0.8, K_I=0.08, K_D=0.0, fps=self.fps)
+        self.speed_control = PIDController(K_P=0.5, K_I=0.08, K_D=0.0, fps=self.fps)
 
         self.current_speed = 10.0
         self.waypoints = None
@@ -118,14 +118,15 @@ class WaypointPIDController(Node):
         self.debug_pub = self.create_publisher(Float32MultiArray, '/waypoint_pid/debug_waypoints', 10)
 
         start_time = time.time()
-        while time.time() - start_time < 10:
+        while time.time() - start_time < 60:
             _ctrl = CarlaEgoVehicleControl()
-            _ctrl.throttle = float(1)
+            _ctrl.throttle = float(0.6)
             _ctrl.steer = float(0)
             _ctrl.brake = float(0)
             _ctrl.reverse = False
             _ctrl.hand_brake = False
             self.control_pub.publish(_ctrl)
+            time.sleep(1)
 
     def waypoint_callback(self, msg):
         data = np.array(msg.data)

@@ -20,7 +20,7 @@ class WaypointVisualizerNode(Node):
         marker_array = MarkerArray()
         for i, (x, y) in enumerate(points):
             m = Marker()
-            m.header.frame_id = "base_link"
+            m.header.frame_id = "ego"
             m.header.stamp = self.get_clock().now().to_msg()
             m.ns = "waypoints"
             m.id = i

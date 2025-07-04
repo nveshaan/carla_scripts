@@ -49,8 +49,8 @@ class WaypointVisualizer(Node):
         self.clock = pygame.time.Clock()
         self.running = True
 
-        self.create_subscription(Image, '/camera/image', self.image_callback, 10)
-        self.create_subscription(Float32MultiArray, '/waypoints', self.waypoint_callback, 10)
+        self.create_subscription(Image, '/carla/ego/camera/image', self.image_callback, 10)
+        self.create_subscription(Float32MultiArray, '/prediction/waypoints', self.waypoint_callback, 10)
 
     def image_callback(self, msg):
         try:
