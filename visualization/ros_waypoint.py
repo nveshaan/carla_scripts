@@ -7,13 +7,12 @@ import numpy as np
 import pygame
 import cv2
 
-# === Coordinate Transformation ===
 
 def ego_to_camera(points):
     x, y = points[:, 0], points[:, 1]
     z = np.zeros_like(x)
-    cam = np.stack([y, -z, x], axis=1)  # [right, down, forward]
-    cam += np.array([0.0, 2.0, 2.0])    # camera offset (2m up, 2m forward)
+    cam = np.stack([y, -z, x], axis=1)
+    cam += np.array([0.0, 2.0, 2.0])
 
     pitch = np.radians(10.0)
     Rx = np.array([
@@ -23,7 +22,7 @@ def ego_to_camera(points):
     ])
     return (Rx @ cam.T).T
 
-def project_to_image(cam_pts, width=320, height=240, fov=90.0):
+def project_to_image(cam_pts, width, height, fov=90.0):
     fx = fy = width / (2 * np.tan(np.radians(fov / 2)))
     cx, cy = width / 2, height / 2
     x, y, z = cam_pts[:, 0], cam_pts[:, 1], np.clip(cam_pts[:, 2], 1e-5, None)
@@ -31,22 +30,21 @@ def project_to_image(cam_pts, width=320, height=240, fov=90.0):
     v = fy * (y / z) + cy
     return np.stack([u, v], axis=1)
 
-# === Main Node ===
 
 class WaypointVisualizer(Node):
     def __init__(self):
         super().__init__('waypoint_visualizer')
         self.bridge = CvBridge()
 
-        # Display settings
-        self.img_w, self.img_h = 320, 240
-        self.scale = 2
-
         self.current_image = None
         self.current_waypoints = []
 
+        self.scale = 2
+        self.img_w = None
+        self.img_h = None
+        self.screen = None
+
         pygame.init()
-        self.screen = pygame.display.set_mode((self.img_w * self.scale, self.img_h * self.scale))
         pygame.display.set_caption("Waypoint Visualizer")
         self.clock = pygame.time.Clock()
         self.running = True
@@ -57,7 +55,13 @@ class WaypointVisualizer(Node):
     def image_callback(self, msg):
         try:
             cv_image = self.bridge.imgmsg_to_cv2(msg, desired_encoding='bgr8')
-            self.current_image = cv2.cvtColor(cv_image, cv2.COLOR_BGR2RGB)
+            rgb_image = cv2.cvtColor(cv_image, cv2.COLOR_BGR2RGB)
+            self.current_image = rgb_image
+
+            if self.img_w is None:
+                self.img_h, self.img_w = rgb_image.shape[:2]
+                scaled_w, scaled_h = self.img_w * self.scale, self.img_h * self.scale
+                self.screen = pygame.display.set_mode((scaled_w, scaled_h))
         except Exception as e:
             self.get_logger().error(f"Image conversion failed: {e}")
 
@@ -75,19 +79,18 @@ class WaypointVisualizer(Node):
                 if event.type == pygame.QUIT:
                     self.running = False
 
-            if self.current_image is not None:
-                # Resize and rotate image to match pygame layout
+            if self.current_image is not None and self.screen is not None:
                 resized = cv2.resize(self.current_image, (self.img_w * self.scale, self.img_h * self.scale))
-                rotated = np.rot90(resized)
-                surface = pygame.surfarray.make_surface(rotated.swapaxes(0, 1))
+                surface = pygame.surfarray.make_surface(resized.swapaxes(0, 1))  # No rotation
 
-                # Project and draw waypoints
+                # Draw waypoints
                 if self.current_waypoints:
                     pts = np.array(self.current_waypoints)
                     cam_pts = ego_to_camera(pts)
                     img_pts = project_to_image(cam_pts, self.img_w, self.img_h)
                     for pt in img_pts:
-                        u, v = int(pt[0] * self.scale), int(pt[1] * self.scale)
+                        u = int(pt[0] * self.scale)
+                        v = int(pt[1] * self.scale)
                         if 0 <= u < self.img_w * self.scale and 0 <= v < self.img_h * self.scale:
                             pygame.draw.circle(surface, (0, 255, 0), (u, v), 4)
 
@@ -96,7 +99,6 @@ class WaypointVisualizer(Node):
 
         pygame.quit()
 
-# === Entry Point ===
 
 def main():
     rclpy.init()
