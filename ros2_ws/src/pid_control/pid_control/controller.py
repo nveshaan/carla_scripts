@@ -4,6 +4,7 @@ from rclpy.node import Node
 from std_msgs.msg import Float32MultiArray, Int32
 from carla_msgs.msg import CarlaEgoVehicleControl, CarlaEgoVehicleStatus
 
+import time
 import numpy as np
 from collections import deque
 
@@ -104,17 +105,27 @@ class WaypointPIDController(Node):
         self.turn_control = CustomController(self.pid_gains, dt=self.dt)
         self.speed_control = PIDController(K_P=0.8, K_I=0.08, K_D=0.0, fps=self.fps)
 
-        self.current_speed = 0.0
+        self.current_speed = 10.0
         self.waypoints = None
 
         self.create_subscription(Float32MultiArray, '/prediction/waypoints', self.waypoint_callback, 10)
         self.create_subscription(CarlaEgoVehicleStatus, '/carla/ego/vehicle_status', self.status_callback, 10)
-        self.create_subscription(Int32, '/carla/ego/high_level_command', self.command_callback, 10)
+        # self.create_subscription(Int32, '/carla/ego/high_level_command', self.command_callback, 10)
 
         self.control_pub = self.create_publisher(CarlaEgoVehicleControl, '/carla/ego/vehicle_control_cmd', 10)
         self.timer = self.create_timer(self.dt, self.control_loop)
 
         self.debug_pub = self.create_publisher(Float32MultiArray, '/waypoint_pid/debug_waypoints', 10)
+
+        start_time = time.time()
+        while time.time() - start_time < 10:
+            _ctrl = CarlaEgoVehicleControl()
+            _ctrl.throttle = float(1)
+            _ctrl.steer = float(0)
+            _ctrl.brake = float(0)
+            _ctrl.reverse = False
+            _ctrl.hand_brake = False
+            self.control_pub.publish(_ctrl)
 
     def waypoint_callback(self, msg):
         data = np.array(msg.data)

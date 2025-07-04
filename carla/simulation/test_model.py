@@ -4,7 +4,7 @@ import time
 import psutil
 import random
 import threading
-import keyboard  # pip install keyboard
+import keyboard
 
 import rclpy
 from rclpy.node import Node
@@ -42,7 +42,7 @@ def launch_carla():
             pass
 
     return subprocess.Popen(
-        ["./CarlaUnreal.sh", "--ros2", "-RenderOffScreen"],
+        ["/mnt/western/Carla-0.10.0-Linux-Shipping/CarlaUnreal.sh", "--ros2", "-RenderOffScreen"],
         stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL
     )
 
@@ -60,15 +60,15 @@ def get_closest_command(ego_location, route, lookahead=5.0):
 
 # === ROS Nodes ===
 class RoutePublisherNode(Node):
-    def __init__(self, vehicle, route):
-        super().__init__('route_publisher')
+    def __init__(self, vehicle):
+        super().__init__('velocity_publisher')
         self.vehicle = vehicle
-        self.route = route
-        self.cmd = -1
+        # self.route = route
+        self.cmd = 4
 
-        self.status_pub = self.create_publisher(CarlaEgoVehicleStatus, '/carla/ego_vehicle/vehicle_status', 10)
-        self.cmd_pub = self.create_publisher(Int32, '/ego/high_level_command', 10)
-        self.enable_autonomy = bool(route and len(route) > 0)
+        self.status_pub = self.create_publisher(CarlaEgoVehicleStatus, '/carla/ego/vehicle_status', 10)
+        # self.cmd_pub = self.create_publisher(Int32, '/ego/high_level_command', 10)
+        self.enable_autonomy = False # bool(route and len(route) > 0)
 
         if not self.enable_autonomy:
             self.get_logger().warn("Route not available. Disabling command publishing from planner.")
@@ -129,25 +129,26 @@ class KeyboardCommandNode(Node):
 
 # === Main Entry ===
 def main():
-    carla_proc = launch_carla()
-    print("Launching CARLA...")
-    time.sleep(10)
+    # carla_proc = launch_carla()
+    # print("Launching CARLA...")
+    # time.sleep(10)
 
-    client = carla.Client('172.28.129.33', 2000)
+    client = carla.Client('localhost', 1946)
     client.set_timeout(10.0)
     world = client.load_world(MAP)
     blueprint_library = world.get_blueprint_library()
 
     # Setup Global Route Planner
-    dao = GlobalRoutePlannerDAO(world.get_map(), SAMPLING_RESOLUTION)
-    grp = GlobalRoutePlanner(dao)
-    grp.setup()
+    # dao = GlobalRoutePlannerDAO(world.get_map(), SAMPLING_RESOLUTION)
+    # grp = GlobalRoutePlanner(dao)
+    # grp.setup()
 
     # Spawn ego vehicle
     spawn_point, end_point = random.choices(world.get_map().get_spawn_points(), k=2)
     vehicle_bp = blueprint_library.find(VEHICLE_TYPE)
-    vehicle_bp.set_attribute("role_name", "ego")
+    vehicle_bp.set_attribute("ros_name", "ego")
     ego_vehicle = world.try_spawn_actor(vehicle_bp, spawn_point)
+    # ego_vehicle.enable_for_ros()
     if not ego_vehicle:
         raise RuntimeError("Failed to spawn ego vehicle.")
 
@@ -156,30 +157,30 @@ def main():
     sensor_bp.set_attribute('image_size_x', '320')
     sensor_bp.set_attribute('image_size_y', '240')
     sensor_bp.set_attribute('fov', '90')
-    sensor_bp.set_attribute('role_name', 'camera')
+    sensor_bp.set_attribute('ros_name', 'camera')
 
     camera_transform = carla.Transform(carla.Location(x=2.0, z=2.0), carla.Rotation(pitch=-10.0))
     camera = world.spawn_actor(sensor_bp, camera_transform, attach_to=ego_vehicle)
     camera.enable_for_ros()
 
     # Try planning route
-    start_wp = world.get_map().get_waypoint(ego_vehicle.get_location())
-    end_wp = world.get_map().get_waypoint(end_point.location)
-    route = grp.trace_route(start_wp.transform.location, end_wp.transform.location)
+    # start_wp = world.get_map().get_waypoint(ego_vehicle.get_location())
+    # end_wp = world.get_map().get_waypoint(end_point.location)
+    # route = grp.trace_route(start_wp.transform.location, end_wp.transform.location)
 
     rclpy.init()
 
     try:
-        route_node = RoutePublisherNode(ego_vehicle, route)
-        if not route_node.enable_autonomy:
-            keyboard_node = KeyboardCommandNode()
-            executor = rclpy.executors.MultiThreadedExecutor()
-            executor.add_node(route_node)
-            executor.add_node(keyboard_node)
-            executor.spin()
-            keyboard_node.destroy_node()
-        else:
-            rclpy.spin(route_node)
+        route_node = RoutePublisherNode(ego_vehicle)
+      #  if not route_node.enable_autonomy:
+      #      keyboard_node = KeyboardCommandNode()
+      #      executor = rclpy.executors.MultiThreadedExecutor()
+      #      executor.add_node(route_node)
+      #      executor.add_node(keyboard_node)
+      #      executor.spin()
+      #      keyboard_node.destroy_node()
+      #  else:
+        rclpy.spin(route_node)
 
         route_node.destroy_node()
 
@@ -187,7 +188,7 @@ def main():
         rclpy.shutdown()
         camera.destroy()
         ego_vehicle.destroy()
-        carla_proc.terminate()
+        # carla_proc.terminate()
 
 
 if __name__ == '__main__':

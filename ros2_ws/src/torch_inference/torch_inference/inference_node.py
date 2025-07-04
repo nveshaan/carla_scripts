@@ -13,6 +13,7 @@ from carla_msgs.msg import CarlaEgoVehicleStatus
 from cv_bridge import CvBridge, CvBridgeError
 import cv2
 import os
+import numpy as np
 
 class WaypointPredictionNode(Node):
     """
@@ -33,16 +34,18 @@ class WaypointPredictionNode(Node):
 
         self.transform = T.Compose([
             T.Lambda(lambda img: cv2.cvtColor(img, cv2.COLOR_BGR2RGB)),
+	    T.ToTensor(),
+	    T.Lambda(lambda img: img.unsqueeze(0)),
         ])
         
         self.latest_img = None
         self.latest_vel = None
-        self.latest_cmd = None
+        self.latest_cmd = 4.0
 
         if self.env == "sim":
             self.img_sub = self.create_subscription(Image, '/carla/ego/camera/image', self.img_callback, 10)
             self.vel_sub = self.create_subscription(CarlaEgoVehicleStatus, '/carla/ego/vehicle_status', self.vel_callback, 10)
-            self.cmd_sub = self.create_subscription(Int32, '/carla/ego/high_level_command', self.cmd_callback, 10)
+            # self.cmd_sub = self.create_subscription(Int32, '/carla/ego/high_level_command', self.cmd_callback, 10)
         else:
             pass # TODO: check the real topic names
 
@@ -51,6 +54,7 @@ class WaypointPredictionNode(Node):
         self.bridge = CvBridge()
         self.model = ImagePolicyModel(backbone="resnet34")
         self.model.load_state_dict(torch.load(model_path, map_location=self.device, weights_only=True), strict=False)
+        self.model.to(self.device)
         self.model.eval()
 
     def img_callback(self, img):
@@ -70,7 +74,7 @@ class WaypointPredictionNode(Node):
         if self.latest_cmd is None:
             self.latest_cmd = 4.0
         if self.latest_vel is None:
-            self.latest_vel = 0.0
+            self.latest_vel = 10.0
         
         try:
             cv_image = self.bridge.imgmsg_to_cv2(self.latest_img, 'bgr8')
@@ -80,9 +84,10 @@ class WaypointPredictionNode(Node):
         
         try:
             image_tensor = self.transform(cv_image)
-            waypoints = self.model(torch.tensor([image_tensor], torch.float32, self.device),
-                                   torch.tensor([self.latest_vel], torch.float32, self.device),
-                                   torch.tensor([self.latest_cmd], torch.float32, self.device))[0].cpu().numpy()
+            with torch.inference_mode():
+                waypoints = self.model(torch.tensor(image_tensor, dtype=torch.float32, device=self.device),
+                                       torch.tensor(np.array([self.latest_vel]), dtype=torch.float32, device=self.device),
+                                       torch.tensor(np.array([self.latest_cmd]), dtype=torch.float32, device=self.device))[0].cpu().numpy()
         except RuntimeError as e:
             self.get_logger().error('Failed to infer model: %s' % str(e))
             return
