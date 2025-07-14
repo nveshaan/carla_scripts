@@ -1,10 +1,10 @@
 import carla
 import subprocess
 import time
-import psutil
 import random
 import threading
-import keyboard
+# import keyboard
+# import psutil
 
 import rclpy
 from rclpy.node import Node

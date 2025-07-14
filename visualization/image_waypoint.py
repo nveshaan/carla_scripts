@@ -13,16 +13,16 @@ from models.image_net import ImagePolicyModel
 from dataloader.dataset import SampleData
 
 # === MODEL INITIALIZATION ===
-file_path = "E:/marathon.hdf5"
+file_path = "data/marathon.hdf5"
 
-device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+device = torch.device("cuda" if torch.cuda.is_available() else "mps" if torch.backends.mps.is_available() else "cpu")
 loss_fn = torch.nn.MSELoss()
 
 dataset = SampleData(file_path, 1, 5, 5, 1, 5, ["image", "velocity", "command"], ["location"])
 dataloader = DataLoader(dataset, 1, shuffle=False)
 
 model = ImagePolicyModel(backbone="resnet34")
-model.load_state_dict(torch.load("checkpoints/0627_1556_model.pth", map_location=device, weights_only=True), strict=False)
+model.load_state_dict(torch.load("checkpoints/0627_0936_model.pth", map_location=device, weights_only=True), strict=False)
 model.to(device)
 model.eval()
 

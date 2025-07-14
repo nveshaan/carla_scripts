@@ -2,13 +2,17 @@
 *.log
 *.hdf5
 
+# Temporary files
+.DS_Store
+*.tmp
+
 # Python cache
 __pycache__/
 *.pyc
 
 # Model checkpoints
-checkpoints/
-*pth
+checkpoints/*
+!checkpoints/0627_0936_model.pth
 
 # Weights & Biases logs
 wandb/
