@@ -17,6 +17,10 @@ from navigation.local_planner import RoadOption
 from navigation.global_route_planner import GlobalRoutePlanner
 from navigation.global_route_planner_dao import GlobalRoutePlannerDAO
 
+import numpy as np
+from sensor_msgs.msg import Image
+from cv_bridge import CvBridge
+
 # === Constants ===
 VEHICLE_TYPE = 'vehicle.nissan.patrol'
 MAP = 'Mine_01'
@@ -76,7 +80,7 @@ class CarlaNode(Node):
 
         self.timer = self.create_timer(0.05, self.update_callback)  # 20 Hz
 
-        self.control_sub = self.create_subscription(CarlaEgoVehicleControl, '/carla/ego/vehicle_control_cmd', self.control_callback, 10)
+        # self.control_sub = self.create_subscription(CarlaEgoVehicleControl, '/carla/ego/vehicle_control_cmd', self.control_callback, 10)
 
     def update_callback(self):
         if not self.vehicle.is_alive:
@@ -141,13 +145,29 @@ class KeyboardCommandNode(Node):
         self.get_logger().info(f"Published manual command: {msg.data}")
 
 
+class CameraPublisher(Node):
+    def __init__(self):
+        super().__init__('camera_publisher')
+        self.publisher_ = self.create_publisher(Image, '/carla/ego/camera/image', 10)
+        self.bridge = CvBridge()
+
+    def publish_image(self, carla_image):
+        # Convert CARLA image to numpy array
+        array = np.frombuffer(carla_image.raw_data, dtype=np.uint8)
+        array = array.reshape((carla_image.height, carla_image.width, 4))  # BGRA format
+        rgb_array = array[:, :, :3][:, :, ::-1]  # Convert BGRA to RGB
+
+        ros_image = self.bridge.cv2_to_imgmsg(rgb_array, encoding='rgb8')
+        self.publisher_.publish(ros_image)
+
+
 # === Main Entry ===
 def main():
     # carla_proc = launch_carla()
     # print("Launching CARLA...")
     # time.sleep(10)
 
-    client = carla.Client('localhost', 1946)
+    client = carla.Client('172.28.243.235', 2000)
     client.set_timeout(10.0)
     world = client.load_world(MAP)
     blueprint_library = world.get_blueprint_library()
@@ -163,6 +183,7 @@ def main():
     vehicle_bp.set_attribute("ros_name", "ego")
     ego_vehicle = world.try_spawn_actor(vehicle_bp, spawn_point)
     # ego_vehicle.enable_for_ros()
+    ego_vehicle.set_autopilot(True)
     if not ego_vehicle:
         raise RuntimeError("Failed to spawn ego vehicle.")
 
@@ -183,20 +204,22 @@ def main():
     # route = grp.trace_route(start_wp.transform.location, end_wp.transform.location)
 
     rclpy.init()
+    camera_node = CameraPublisher()
+
+    def camera_callback(image):
+        camera_node.publish_image(image)
+
+    camera.listen(camera_callback)
 
     try:
         carla_node = CarlaNode(ego_vehicle)
-      #  if not route_node.enable_autonomy:
-      #      keyboard_node = KeyboardCommandNode()
-      #      executor = rclpy.executors.MultiThreadedExecutor()
-      #      executor.add_node(route_node)
-      #      executor.add_node(keyboard_node)
-      #      executor.spin()
-      #      keyboard_node.destroy_node()
-      #  else:
-        rclpy.spin(carla_node)
+        executor = rclpy.executors.MultiThreadedExecutor()
+        executor.add_node(carla_node)
+        executor.add_node(camera_node)
+        executor.spin()
 
         carla_node.destroy_node()
+        camera_node.destroy_node()
 
     finally:
         rclpy.shutdown()

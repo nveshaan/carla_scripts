@@ -15,6 +15,8 @@ import cv2
 import os
 import numpy as np
 
+torch.backends.nnpack.enabled = False
+
 class WaypointPredictionNode(Node):
     """
     Subscription: /image, /velocity, /command
