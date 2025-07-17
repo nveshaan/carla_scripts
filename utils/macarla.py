@@ -15,6 +15,65 @@ import sys
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
 
+class FilteredWorld:
+    """Wrapper for carla.World that filters spawn_actor calls"""
+    
+    def __init__(self, world):
+        self._world = world
+        self._blocked_sensors = {
+            'sensor.camera.rgb',
+            'sensor.camera.depth',
+            'sensor.camera.semantic_segmentation',
+            'sensor.lidar.ray_cast',
+            'sensor.other.gnss',
+            'sensor.other.imu',
+            'sensor.other.collision',
+            'sensor.other.lane_invasion',
+            'sensor.other.obstacle',
+            'sensor.other.radar'
+        }
+    
+    def spawn_actor(self, blueprint, transform, attach_to=None):
+        """Filter sensor spawns"""
+        if hasattr(blueprint, 'id') and blueprint.id in self._blocked_sensors:
+            logger.warning(f"Blocked sensor spawn: {blueprint.id}")
+            return None
+        
+        # Allow non-sensor actors
+        return self._world.spawn_actor(blueprint, transform, attach_to)
+    
+    def try_spawn_actor(self, blueprint, transform, attach_to=None):
+        """Filter sensor spawns for try_spawn_actor"""
+        if hasattr(blueprint, 'id') and blueprint.id in self._blocked_sensors:
+            logger.warning(f"Blocked sensor try_spawn: {blueprint.id}")
+            return None
+        
+        return self._world.try_spawn_actor(blueprint, transform, attach_to)
+    
+    def __getattr__(self, name):
+        """Delegate all other attributes to the real world"""
+        return getattr(self._world, name)
+
+class FilteredClient:
+    """Wrapper for carla.Client that returns filtered world"""
+    
+    def __init__(self, client):
+        self._client = client
+    
+    def get_world(self):
+        """Return a filtered world"""
+        world = self._client.get_world()
+        return FilteredWorld(world)
+    
+    def load_world(self, map_name):
+        """Load world and return filtered version"""
+        world = self._client.load_world(map_name)
+        return FilteredWorld(world)
+    
+    def __getattr__(self, name):
+        """Delegate all other attributes to the real client"""
+        return getattr(self._client, name)
+
 class CarlaService(rpyc.Service):
     """Enhanced CARLA service with better error handling and connection management"""
     
@@ -25,32 +84,17 @@ class CarlaService(rpyc.Service):
         logger.info("CarlaService initialized")
     
     def exposed_carla(self):
-        """Expose the carla module"""
-        return carla
-    
-    def exposed_get_client(self, host='127.0.0.1', port=2000, timeout=10.0):
-        """Get a CARLA client with connection caching"""
-        client_key = f"{host}:{port}"
-        
-        with self._client_lock:
-            if client_key not in self._clients:
-                try:
-                    client = carla.Client(host, port)
-                    client.set_timeout(timeout)
-                    # Test connection
-                    world = client.get_world()
-                    self._clients[client_key] = client
-                    logger.info(f"Created new client for {client_key}")
-                except Exception as e:
-                    logger.error(f"Failed to create client for {client_key}: {e}")
-                    raise
+        """Expose the carla module with filtered Client"""
+        # Create a module-like object
+        class FilteredCarlaModule:
+            def Client(self, host='localhost', port=2000, worker_threads=0):
+                client = carla.Client(host, port, worker_threads)
+                return FilteredClient(client)
             
-            return self._clients[client_key]
-    
-    def exposed_get_world(self, host='127.0.0.1', port=2000):
-        """Get the CARLA world"""
-        client = self.exposed_get_client(host, port)
-        return client.get_world()
+            def __getattr__(self, name):
+                return getattr(carla, name)
+        
+        return FilteredCarlaModule()
     
     def exposed_ping(self):
         """Simple ping to test connection"""
