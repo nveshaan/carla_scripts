@@ -10,13 +10,81 @@ import logging
 import threading
 import time
 import sys
+import zmq
+import pickle
+import json
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
 
+class SensorDataPublisher:
+    """ZeroMQ publisher for sensor data"""
+    
+    def __init__(self, port=5555):
+        self.context = zmq.Context()
+        self.socket = self.context.socket(zmq.PUB)
+        self.socket.bind(f"tcp://*:{port}")
+        logger.info(f"Sensor data publisher started on port {port}")
+    
+    def publish_sensor_data(self, sensor_type, data):
+        """Publish sensor data over ZeroMQ"""
+        try:
+            message = {
+                'sensor_type': sensor_type,
+                'timestamp': time.time(),
+                'data': data
+            }
+            # Use sensor_type as topic for filtering
+            self.socket.send_multipart([
+                sensor_type.encode('utf-8'),
+                pickle.dumps(message)
+            ])
+            logger.debug(f"Published {sensor_type} data")
+        except Exception as e:
+            logger.error(f"Failed to publish sensor data: {e}")
+    
+    def close(self):
+        """Clean up publisher"""
+        self.socket.close()
+        self.context.term()
+
+# Global publisher instance
+sensor_publisher = SensorDataPublisher()
+
+class FilteredActor:
+    """Wrapper for sensor actors that publishes sensor data over ZeroMQ"""
+    
+    def __init__(self, actor, sensor_type):
+        self._actor = actor
+        self._sensor_type = sensor_type
+        self._original_listen = actor.listen
+    
+    def listen(self, callback):
+        """Intercept sensor listen calls and publish data over ZeroMQ"""
+        logger.info(f"Intercepting sensor listen for: {self._sensor_type}")
+        
+        def zmq_callback(data):
+            """Callback that publishes to ZeroMQ and calls original callback"""
+            try:
+                # Publish sensor data over ZeroMQ
+                sensor_publisher.publish_sensor_data(self._sensor_type, data)
+                
+                # Also call the original callback if needed
+                if callback:
+                    callback(data)
+            except Exception as e:
+                logger.error(f"Error in ZMQ callback for {self._sensor_type}: {e}")
+        
+        # Use the original listen method with our custom callback
+        return self._original_listen(zmq_callback)
+    
+    def __getattr__(self, name):
+        """Delegate all other attributes to the real actor"""
+        return getattr(self._actor, name)
+
 class FilteredWorld:
-    """Wrapper for carla.World that filters spawn_actor calls"""
+    """Wrapper for carla.World that returns sensor actors with ZeroMQ publishing"""
     
     def __init__(self, world):
         self._world = world
@@ -34,21 +102,24 @@ class FilteredWorld:
         }
     
     def spawn_actor(self, blueprint, transform, attach_to=None):
-        """Filter sensor spawns"""
-        if hasattr(blueprint, 'id') and blueprint.id in self._blocked_sensors:
-            logger.warning(f"Blocked sensor spawn: {blueprint.id}")
-            return None
+        """Spawn actor and return filtered version if it's a sensor"""
+        actor = self._world.spawn_actor(blueprint, transform, attach_to)
         
-        # Allow non-sensor actors
-        return self._world.spawn_actor(blueprint, transform, attach_to)
+        # If it's a sensor, return a filtered version
+        if actor and hasattr(blueprint, 'id') and blueprint.id in self._blocked_sensors:
+            return FilteredActor(actor, blueprint.id)
+        
+        return actor
     
     def try_spawn_actor(self, blueprint, transform, attach_to=None):
-        """Filter sensor spawns for try_spawn_actor"""
-        if hasattr(blueprint, 'id') and blueprint.id in self._blocked_sensors:
-            logger.warning(f"Blocked sensor try_spawn: {blueprint.id}")
-            return None
+        """Try to spawn actor and return filtered version if it's a sensor"""
+        actor = self._world.try_spawn_actor(blueprint, transform, attach_to)
         
-        return self._world.try_spawn_actor(blueprint, transform, attach_to)
+        # If it's a sensor, return a filtered version
+        if actor and hasattr(blueprint, 'id') and blueprint.id in self._blocked_sensors:
+            return FilteredActor(actor, blueprint.id)
+        
+        return actor
     
     def __getattr__(self, name):
         """Delegate all other attributes to the real world"""
@@ -152,10 +223,12 @@ def main():
         
     except KeyboardInterrupt:
         logger.info("Server stopping...")
+        sensor_publisher.close()
     except Exception as e:
         logger.error(f"Server error: {e}")
         import traceback
         traceback.print_exc()
+        sensor_publisher.close()
 
 if __name__ == '__main__':
     main()

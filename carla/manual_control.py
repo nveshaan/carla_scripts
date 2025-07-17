@@ -57,9 +57,9 @@ Use ARROWS or WASD keys for control.
 # -- imports -------------------------------------------------------------------
 # ==============================================================================
 
-import carla
+import rpyc
 
-from carla import ColorConverter as cc
+conn = 
 
 import argparse
 import collections

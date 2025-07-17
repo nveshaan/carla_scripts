@@ -13,7 +13,7 @@ from models.image_net import ImagePolicyModel
 from dataloader.dataset import SampleData
 
 # === MODEL INITIALIZATION ===
-file_path = "data/marathon.hdf5"
+file_path = "/Volumes/Marsupium/marathon.hdf5"
 
 device = torch.device("cuda" if torch.cuda.is_available() else "mps" if torch.backends.mps.is_available() else "cpu")
 loss_fn = torch.nn.MSELoss()
