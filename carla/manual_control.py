@@ -57,9 +57,7 @@ Use ARROWS or WASD keys for control.
 # -- imports -------------------------------------------------------------------
 # ==============================================================================
 
-import rpyc
-
-conn = 
+import Pyro5.api
 
 import argparse
 import collections
@@ -71,6 +69,17 @@ import re
 import os
 import weakref
 import sys
+
+# Connect to Pyro server and get carla module
+try:
+    carla_service = Pyro5.api.Proxy("PYRO:CarlaService@localhost:18861")
+    carla = carla_service.carla()
+    # Get color converter from carla module
+    cc = carla.ColorConverter
+except Exception as e:
+    print(f"Failed to connect to Pyro CARLA server: {e}")
+    print("Make sure the Pyro CARLA server is running on localhost:18861")
+    sys.exit(1)
 
 try:
     import pygame
