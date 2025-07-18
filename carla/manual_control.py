@@ -57,7 +57,9 @@ Use ARROWS or WASD keys for control.
 # -- imports -------------------------------------------------------------------
 # ==============================================================================
 
-import Pyro5.api
+import carla
+
+from carla import ColorConverter as cc
 
 import argparse
 import collections
@@ -68,18 +70,6 @@ import random
 import re
 import os
 import weakref
-import sys
-
-# Connect to Pyro server and get carla module
-try:
-    carla_service = Pyro5.api.Proxy("PYRO:CarlaService@localhost:18861")
-    carla = carla_service.carla()
-    # Get color converter from carla module
-    cc = carla.ColorConverter
-except Exception as e:
-    print(f"Failed to connect to Pyro CARLA server: {e}")
-    print("Make sure the Pyro CARLA server is running on localhost:18861")
-    sys.exit(1)
 
 try:
     import pygame
@@ -1273,7 +1263,7 @@ def game_loop(args):
         client = carla.Client(args.host, args.port)
         client.set_timeout(2000.0)
 
-        sim_world = client.get_world()
+        sim_world = client.load_world('Mine_01')
         traffic_manager = client.get_trafficmanager()
         if args.sync:
             original_settings = sim_world.get_settings()

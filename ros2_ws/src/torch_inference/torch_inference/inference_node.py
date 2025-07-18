@@ -84,16 +84,12 @@ class WaypointPredictionNode(Node):
             self.get_logger().error('Failed to convert image: %s' % str(e))
             return
         
-        try:
-            image_tensor = self.transform(cv_image)
-            with torch.inference_mode():
-                waypoints = self.model(torch.tensor(image_tensor, dtype=torch.float32, device=self.device),
-                                       torch.tensor(np.array([self.latest_vel]), dtype=torch.float32, device=self.device),
-                                       torch.tensor(np.array([self.latest_cmd]), dtype=torch.float32, device=self.device))[0].cpu().numpy()
-        except RuntimeError as e:
-            self.get_logger().error('Failed to infer model: %s' % str(e))
-            return
-
+        image_tensor = self.transform(cv_image)
+        with torch.inference_mode():
+            waypoints = self.model(torch.tensor(image_tensor, dtype=torch.float32, device=self.device),
+                                   torch.tensor(np.array([self.latest_vel]), dtype=torch.float32, device=self.device),
+                                   torch.tensor(np.array([self.latest_cmd]), dtype=torch.float32, device=self.device))[0].cpu().numpy()
+        
         try:
             msg = Float32MultiArray()
             msg.data = waypoints.flatten().tolist()
