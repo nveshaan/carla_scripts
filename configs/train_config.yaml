@@ -5,7 +5,7 @@ defaults:
 
 seed: 42
 data:
-  file_path: "data/run.hdf5"
+  file_path: "/Volumes/Marsupium/marathon.hdf5"
   obs_keys: ["image", "velocity", "command"]
   act_keys: ["location"]
   obs_horizon: 1
@@ -14,8 +14,8 @@ data:
   obs_stride: 1
   act_stride: 5
   val_ratio: 0.2
-  batch_size: 32
-  num_workers: 2
+  batch_size: 64
+  num_workers: 4
 
 model:
   backbone: "resnet34"
@@ -24,13 +24,14 @@ model:
   commands: 5
 
 train:
-  epochs: 3
+  epochs: 10
   lr: 0.001
   use_compile: False
   save: True
   epoch_save: False
+  use_weighted_loss: True
 
 wandb:
   project: "image-policy"
-  name: "image_net_without_coordConverter"
-  log: False
+  name: "image_net_weighted_loss"
+  log: True

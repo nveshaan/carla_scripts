@@ -24,7 +24,7 @@ def set_seed(seed):
     torch.manual_seed(seed)
     torch.cuda.manual_seed_all(seed)
 
-def train_epoch(loader, model, loss_fn, optimizer, device, epoch, log_to_wandb):
+def train_epoch(loader, model, loss_fn, optimizer, device, epoch, log_to_wandb, use_weighted_loss):
     model.train()
     total_loss = 0.0
 
@@ -35,6 +35,15 @@ def train_epoch(loader, model, loss_fn, optimizer, device, epoch, log_to_wandb):
 
         pred = model(*obs)
         loss = loss_fn(pred, *act)
+
+        if use_weighted_loss:
+            weights = torch.ones_like(obs[2], dtype=torch.float32)
+            weights[obs[2] == 1] = 8.0
+            weights[obs[2] == 2] = 23.0
+            weights[obs[2] == 3] = 10.0
+            weights[obs[2] == 4] = 0.25
+            
+            loss = loss * weights.mean()
 
         optimizer.zero_grad()
         loss.backward()
@@ -48,7 +57,7 @@ def train_epoch(loader, model, loss_fn, optimizer, device, epoch, log_to_wandb):
 
     return total_loss / len(loader)
 
-def validate_epoch(loader, model, loss_fn, device, epoch, log_to_wandb):
+def validate_epoch(loader, model, loss_fn, device, epoch, log_to_wandb, use_weighted_loss):
     model.eval()
     total_loss = 0.0
 
@@ -60,6 +69,16 @@ def validate_epoch(loader, model, loss_fn, device, epoch, log_to_wandb):
 
             pred = model(*obs)
             loss = loss_fn(pred, *act)
+
+            if use_weighted_loss:
+                weights = torch.ones_like(obs[2], dtype=torch.float32)
+                weights[obs[2] == 1] = 8.0
+                weights[obs[2] == 2] = 23.0
+                weights[obs[2] == 3] = 10.0
+                weights[obs[2] == 4] = 0.25
+
+                loss = loss * weights.mean()
+
             total_loss += loss.item()
             loop.set_postfix(loss=loss.item())
 
@@ -68,7 +87,7 @@ def validate_epoch(loader, model, loss_fn, device, epoch, log_to_wandb):
 @hydra.main(config_path="../configs", config_name="train_config", version_base="1.3")
 def main(cfg: DictConfig):
     set_seed(cfg.seed)
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    device = torch.device("cuda" if torch.cuda.is_available() else "mps" if torch.backends.mps.is_available() else "cpu")
 
     if cfg.wandb.log:
         wandb.init(project=cfg.wandb.project, name=cfg.wandb.name, config=OmegaConf.to_container(cfg))
@@ -89,9 +108,9 @@ def main(cfg: DictConfig):
     train_dataset, val_dataset = random_split(dataset, [train_size, val_size])
 
     train_loader = DataLoader(train_dataset, batch_size=cfg.data.batch_size, shuffle=True,
-                              num_workers=cfg.data.num_workers, pin_memory=True)
+                              num_workers=cfg.data.num_workers, pin_memory=False)
     val_loader = DataLoader(val_dataset, batch_size=cfg.data.batch_size, shuffle=False,
-                            num_workers=cfg.data.num_workers, pin_memory=True)
+                            num_workers=cfg.data.num_workers, pin_memory=False)
 
     model = ImagePolicyModel(backbone=cfg.model.backbone, pretrained=cfg.model.pretrained, steps=cfg.model.steps, commands=cfg.model.commands).to(device)
     if cfg.train.use_compile:
@@ -102,8 +121,8 @@ def main(cfg: DictConfig):
 
     for epoch in range(cfg.train.epochs):
         print(f"\n Epoch {epoch+1}/{cfg.train.epochs}")
-        train_loss = train_epoch(train_loader, model, loss_fn, optimizer, device, epoch, cfg.wandb.log)
-        val_loss = validate_epoch(val_loader, model, loss_fn, device, epoch, cfg.wandb.log)
+        train_loss = train_epoch(train_loader, model, loss_fn, optimizer, device, epoch, cfg.wandb.log, cfg.train.use_weighted_loss)
+        val_loss = validate_epoch(val_loader, model, loss_fn, device, epoch, cfg.wandb.log, cfg.train.use_weighted_loss)
 
         print(f" Train Loss: {train_loss:.6f} | Val Loss: {val_loss:.6f}")
 
@@ -132,8 +151,18 @@ def main(cfg: DictConfig):
 
 if __name__ == "__main__":
     print("PyTorch Version:", torch.__version__)
-    print("CUDA Available:", torch.cuda.is_available())
-    print("CUDA Version:", torch.version.cuda)
-    print("cuDNN Version:", torch.backends.cudnn.version())
-    print("Device Count:", torch.cuda.device_count())
+    if torch.cuda.is_available():
+        print("Using CUDA")
+        print("CUDA Available:", torch.cuda.is_available())
+        print("CUDA Version:", torch.version.cuda)
+        print("cuDNN Version:", torch.backends.cudnn.version())
+        print("Device Count:", torch.cuda.device_count())
+    elif torch.backends.mps.is_available():
+        print("Using MPS")
+        print("MPS Available:", torch.backends.mps.is_available())
+        print("MPS Built:", torch.backends.mps.is_built())
+        print("Device Count:", torch.mps.device_count())
+    else:
+        print("Using CPU")
+        print("Device:", torch.cpu.current_device())
     main()
